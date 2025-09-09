@@ -11,6 +11,16 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    // Repository Configuration
+    REPO_URL: z.string().url().optional(),
+    REPO_BRANCH: z.string().default("main"),
+    SCRIPTS_DIRECTORY: z.string().default("scripts"),
+    ALLOWED_SCRIPT_EXTENSIONS: z.string().default(".sh,.py,.js,.ts,.bash"),
+    // Security
+    MAX_SCRIPT_EXECUTION_TIME: z.string().default("300000"), // 5 minutes in ms
+    ALLOWED_SCRIPT_PATHS: z.string().default("scripts/"),
+    // WebSocket Configuration
+    WEBSOCKET_PORT: z.string().default("3001"),
   },
 
   /**
@@ -29,6 +39,16 @@ export const env = createEnv({
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
+    // Repository Configuration
+    REPO_URL: process.env.REPO_URL,
+    REPO_BRANCH: process.env.REPO_BRANCH,
+    SCRIPTS_DIRECTORY: process.env.SCRIPTS_DIRECTORY,
+    ALLOWED_SCRIPT_EXTENSIONS: process.env.ALLOWED_SCRIPT_EXTENSIONS,
+    // Security
+    MAX_SCRIPT_EXECUTION_TIME: process.env.MAX_SCRIPT_EXECUTION_TIME,
+    ALLOWED_SCRIPT_PATHS: process.env.ALLOWED_SCRIPT_PATHS,
+    // WebSocket Configuration
+    WEBSOCKET_PORT: process.env.WEBSOCKET_PORT,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**
