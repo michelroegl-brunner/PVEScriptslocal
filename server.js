@@ -4,12 +4,13 @@ import next from 'next';
 import { WebSocketServer } from 'ws';
 import { spawn } from 'child_process';
 import { join, resolve } from 'path';
+import stripAnsi from 'strip-ansi';
+import { spawn as ptySpawn } from 'node-pty';
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = 'localhost';
+const hostname = '0.0.0.0';
 const port = process.env.PORT || 3000;
 
-// when using middleware `hostname` and `port` must be provided below
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
@@ -27,10 +28,19 @@ class ScriptExecutionHandler {
   setupWebSocket() {
     this.wss.on('connection', (ws, request) => {
       console.log('New WebSocket connection for script execution');
+      console.log('Client IP:', request.socket.remoteAddress);
+      console.log('User-Agent:', request.headers['user-agent']);
+      console.log('WebSocket readyState:', ws.readyState);
+      console.log('Request URL:', request.url);
+      
+      // Set connection metadata
+      ws.connectionTime = Date.now();
+      ws.clientIP = request.socket.remoteAddress;
       
       ws.on('message', (data) => {
         try {
           const message = JSON.parse(data.toString());
+          console.log('Received message from client:', message);
           this.handleMessage(ws, message);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -42,8 +52,8 @@ class ScriptExecutionHandler {
         }
       });
 
-      ws.on('close', () => {
-        console.log('WebSocket connection closed');
+      ws.on('close', (code, reason) => {
+        console.log(`WebSocket connection closed: ${code} - ${reason}`);
         this.cleanupActiveExecutions(ws);
       });
 
@@ -55,13 +65,16 @@ class ScriptExecutionHandler {
   }
 
   async handleMessage(ws, message) {
-    const { action, scriptPath, executionId } = message;
+    const { action, scriptPath, executionId, input } = message;
+    console.log('Handling message:', { action, scriptPath, executionId });
 
     switch (action) {
       case 'start':
         if (scriptPath && executionId) {
+          console.log('Starting script execution for:', scriptPath);
           await this.startScriptExecution(ws, scriptPath, executionId);
         } else {
+          console.log('Missing scriptPath or executionId');
           this.sendMessage(ws, {
             type: 'error',
             data: 'Missing scriptPath or executionId',
@@ -76,6 +89,12 @@ class ScriptExecutionHandler {
         }
         break;
 
+      case 'input':
+        if (executionId && input !== undefined) {
+          this.sendInputToProcess(executionId, input);
+        }
+        break;
+
       default:
         this.sendMessage(ws, {
           type: 'error',
@@ -87,11 +106,17 @@ class ScriptExecutionHandler {
 
   async startScriptExecution(ws, scriptPath, executionId) {
     try {
+      console.log('Starting script execution...');
       // Basic validation
       const scriptsDir = join(process.cwd(), 'scripts');
       const resolvedPath = resolve(scriptPath);
       
+      console.log('Scripts directory:', scriptsDir);
+      console.log('Resolved path:', resolvedPath);
+      console.log('Is within scripts dir:', resolvedPath.startsWith(resolve(scriptsDir)));
+      
       if (!resolvedPath.startsWith(resolve(scriptsDir))) {
+        console.log('Script path validation failed');
         this.sendMessage(ws, {
           type: 'error',
           data: 'Script path is not within the allowed scripts directory',
@@ -110,15 +135,25 @@ class ScriptExecutionHandler {
         return;
       }
 
-      // Start script execution
-      const process = spawn('bash', [scriptPath], {
+      // Start script execution with pty for proper TTY support
+      const childProcess = ptySpawn('bash', [scriptPath], {
         cwd: scriptsDir,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 24,
+        env: {
+          ...process.env,
+          TERM: 'xterm-256color', // Enable proper terminal support
+          FORCE_ANSI: 'true', // Allow ANSI codes for proper display
+          COLUMNS: '80', // Set terminal width
+          LINES: '24' // Set terminal height
+        }
       });
+
+      // pty handles encoding automatically
       
       // Store the execution
-      this.activeExecutions.set(executionId, { process, ws });
+      this.activeExecutions.set(executionId, { process: childProcess, ws });
 
       // Send start message
       this.sendMessage(ws, {
@@ -127,8 +162,8 @@ class ScriptExecutionHandler {
         timestamp: Date.now()
       });
 
-      // Handle stdout
-      process.stdout?.on('data', (data) => {
+      // Handle pty data (both stdout and stderr combined)
+      childProcess.onData((data) => {
         this.sendMessage(ws, {
           type: 'output',
           data: data.toString(),
@@ -136,32 +171,11 @@ class ScriptExecutionHandler {
         });
       });
 
-      // Handle stderr
-      process.stderr?.on('data', (data) => {
-        this.sendMessage(ws, {
-          type: 'error',
-          data: data.toString(),
-          timestamp: Date.now()
-        });
-      });
-
       // Handle process exit
-      process.on('exit', (code, signal) => {
+      childProcess.onExit((exitCode, signal) => {
         this.sendMessage(ws, {
           type: 'end',
-          data: `Script execution finished with code: ${code}, signal: ${signal}`,
-          timestamp: Date.now()
-        });
-        
-        // Clean up
-        this.activeExecutions.delete(executionId);
-      });
-
-      // Handle process error
-      process.on('error', (error) => {
-        this.sendMessage(ws, {
-          type: 'error',
-          data: `Process error: ${error.message}`,
+          data: `Script execution finished with code: ${exitCode}, signal: ${signal}`,
           timestamp: Date.now()
         });
         
@@ -192,6 +206,16 @@ class ScriptExecutionHandler {
     }
   }
 
+  sendInputToProcess(executionId, input) {
+    const execution = this.activeExecutions.get(executionId);
+    if (execution && execution.process.write) {
+      console.log('Sending input to process:', JSON.stringify(input), 'Length:', input.length);
+      execution.process.write(input);
+    } else {
+      console.log('No active execution found for input:', executionId);
+    }
+  }
+
   sendMessage(ws, message) {
     if (ws.readyState === 1) { // WebSocket.OPEN
       ws.send(JSON.stringify(message));
@@ -207,6 +231,8 @@ class ScriptExecutionHandler {
     }
   }
 }
+
+// TerminalHandler removed - not used by current application
 
 app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
@@ -229,15 +255,16 @@ app.prepare().then(() => {
     }
   });
 
-  // Create WebSocket handler
+  // Create WebSocket handlers
   const scriptHandler = new ScriptExecutionHandler(httpServer);
+  // Note: TerminalHandler removed as it's not being used by the current application
 
   httpServer
     .once('error', (err) => {
       console.error(err);
       process.exit(1);
     })
-    .listen(port, () => {
+    .listen(port, hostname, () => {
       console.log(`> Ready on http://${hostname}:${port}`);
       console.log(`> WebSocket server running on ws://${hostname}:${port}/ws/script-execution`);
     });

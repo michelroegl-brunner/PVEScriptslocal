@@ -4,6 +4,7 @@ import { api } from '~/trpc/react';
 import { useState } from 'react';
 import { Terminal } from './Terminal';
 
+
 interface ScriptsListProps {
   onRunScript: (scriptPath: string, scriptName: string) => void;
 }

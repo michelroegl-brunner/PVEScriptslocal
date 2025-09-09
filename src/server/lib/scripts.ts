@@ -69,8 +69,11 @@ export class ScriptManager {
    */
   private async isExecutable(filePath: string): Promise<boolean> {
     try {
-      await access(filePath, 0o111); // Check execute permission
-      return true;
+      const stats = await stat(filePath);
+      // Check if file has execute permission for owner, group, or others
+      const mode = stats.mode;
+      const isExecutable = !!(mode & parseInt('111', 8));
+      return isExecutable;
     } catch {
       return false;
     }

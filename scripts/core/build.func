@@ -1,0 +1,801 @@
+# Copyright (c) 2021-2025 michelroegl-brunner
+# Author: michelroegl-brunner
+# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+
+variables() {
+  NSAPP=$(echo "${APP,,}" | tr -d ' ')              # This function sets the NSAPP variable by converting the value of the APP variable to lowercase and removing any spaces.
+  var_install="${NSAPP}-install"                    # sets the var_install variable by appending "-install" to the value of NSAPP.
+  INTEGER='^[0-9]+([.][0-9]+)?$'                    # it defines the INTEGER regular expression pattern.
+  PVEHOST_NAME=$(hostname)                          # gets the Proxmox Hostname and sets it to Uppercase
+  METHOD="default"                                  # sets the METHOD variable to "default", used for the API call.
+  CT_TYPE=${var_unprivileged:-$CT_TYPE}
+}
+
+
+
+source "$(dirname "${BASH_SOURCE[0]}")/core.func"
+
+# This function enables error handling in the script by setting options and defining a trap for the ERR signal.
+catch_errors() {
+  set -Eeo pipefail
+  trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
+}
+
+# This function is called when an error occurs. It receives the exit code, line number, and command that caused the error, and displays an error message.
+error_handler() {
+ 
+  printf "\e[?25h"
+  local exit_code="$?"
+  local line_number="$1"
+  local command="$2"
+  local error_message="${RD}[ERROR]${CL} in line ${RD}$line_number${CL}: exit code ${RD}$exit_code${CL}: while executing command ${YW}$command${CL}"
+  
+  echo -e "\n$error_message\n"
+}
+
+# Check if the shell is using bash
+shell_check() {
+  if [[ "$(basename "$SHELL")" != "bash" ]]; then
+    clear
+    msg_error "Your default shell is currently not set to Bash. To use these scripts, please switch to the Bash shell."
+    echo -e "\nExiting..."
+    sleep 2
+    exit
+  fi
+}
+
+# Run as root only
+root_check() {
+  if [[ "$(id -u)" -ne 0 || $(ps -o comm= -p $PPID) == "sudo" ]]; then
+    clear
+    msg_error "Please run this script as root."
+    echo -e "\nExiting..."
+    sleep 2
+    exit
+  fi
+}
+
+# This function checks the version of Proxmox Virtual Environment (PVE) and exits if the version is not supported.
+# Supported: Proxmox VE 8.0.x – 8.9.x and 9.0 (NOT 9.1+)
+pve_check() {
+  local PVE_VER
+  PVE_VER="$(pveversion | awk -F'/' '{print $2}' | awk -F'-' '{print $1}')"
+
+  # Check for Proxmox VE 8.x: allow 8.0–8.9
+  if [[ "$PVE_VER" =~ ^8\.([0-9]+) ]]; then
+    local MINOR="${BASH_REMATCH[1]}"
+    if ((MINOR < 0 || MINOR > 9)); then
+      msg_error "This version of Proxmox VE is not supported."
+      msg_error "Supported: Proxmox VE version 8.0 – 8.9"
+      exit 1
+    fi
+    return 0
+  fi
+
+  # Check for Proxmox VE 9.x: allow ONLY 9.0
+  if [[ "$PVE_VER" =~ ^9\.([0-9]+) ]]; then
+    local MINOR="${BASH_REMATCH[1]}"
+    if ((MINOR != 0)); then
+      msg_error "This version of Proxmox VE is not yet supported."
+      msg_error "Supported: Proxmox VE version 9.0"
+      exit 1
+    fi
+    return 0
+  fi
+
+  # All other unsupported versions
+  msg_error "This version of Proxmox VE is not supported."
+  msg_error "Supported versions: Proxmox VE 8.0 – 8.x or 9.0"
+  exit 1
+}
+
+# When a node is running tens of containers, it's possible to exceed the kernel's cryptographic key storage allocations.
+# These are tuneable, so verify if the currently deployment is approaching the limits, advise the user on how to tune the limits, and exit the script.
+# https://cleveruptime.com/docs/files/proc-key-users | https://docs.kernel.org/security/keys/core.html
+maxkeys_check() {
+  # Read kernel parameters
+  per_user_maxkeys=$(cat /proc/sys/kernel/keys/maxkeys 2>/dev/null || echo 0)
+  per_user_maxbytes=$(cat /proc/sys/kernel/keys/maxbytes 2>/dev/null || echo 0)
+
+  # Exit if kernel parameters are unavailable
+  if [[ "$per_user_maxkeys" -eq 0 || "$per_user_maxbytes" -eq 0 ]]; then
+    echo -e "${CROSS}${RD} Error: Unable to read kernel parameters. Ensure proper permissions.${CL}"
+    exit 1
+  fi
+
+  # Fetch key usage for user ID 100000 (typical for containers)
+  used_lxc_keys=$(awk '/100000:/ {print $2}' /proc/key-users 2>/dev/null || echo 0)
+  used_lxc_bytes=$(awk '/100000:/ {split($5, a, "/"); print a[1]}' /proc/key-users 2>/dev/null || echo 0)
+
+  # Calculate thresholds and suggested new limits
+  threshold_keys=$((per_user_maxkeys - 100))
+  threshold_bytes=$((per_user_maxbytes - 1000))
+  new_limit_keys=$((per_user_maxkeys * 2))
+  new_limit_bytes=$((per_user_maxbytes * 2))
+
+  # Check if key or byte usage is near limits
+  failure=0
+  if [[ "$used_lxc_keys" -gt "$threshold_keys" ]]; then
+    echo -e "${CROSS}${RD} Warning: Key usage is near the limit (${used_lxc_keys}/${per_user_maxkeys}).${CL}"
+    echo -e "${INFO} Suggested action: Set ${GN}kernel.keys.maxkeys=${new_limit_keys}${CL} in ${BOLD}/etc/sysctl.d/98-community-scripts.conf${CL}."
+    failure=1
+  fi
+  if [[ "$used_lxc_bytes" -gt "$threshold_bytes" ]]; then
+    echo -e "${CROSS}${RD} Warning: Key byte usage is near the limit (${used_lxc_bytes}/${per_user_maxbytes}).${CL}"
+    echo -e "${INFO} Suggested action: Set ${GN}kernel.keys.maxbytes=${new_limit_bytes}${CL} in ${BOLD}/etc/sysctl.d/98-community-scripts.conf${CL}."
+    failure=1
+  fi
+
+  # Provide next steps if issues are detected
+  if [[ "$failure" -eq 1 ]]; then
+    echo -e "${INFO} To apply changes, run: ${BOLD}service procps force-reload${CL}"
+    exit 1
+  fi
+
+  echo -e "${CM}${GN} All kernel key limits are within safe thresholds.${CL}"
+}
+
+# This function checks the system architecture and exits if it's not "amd64".
+arch_check() {
+  if [ "$(dpkg --print-architecture)" != "amd64" ]; then
+    echo -e "\n ${INFO}${YWB}This script will not work with PiMox! \n"
+    echo -e "\n ${YWB}Visit https://github.com/asylumexp/Proxmox for ARM64 support. \n"
+    echo -e "Exiting..."
+    sleep 2
+    exit
+  fi
+}
+
+# Function to get the current IP address based on the distribution
+get_current_ip() {
+  if [ -f /etc/os-release ]; then
+    # Check for Debian/Ubuntu (uses hostname -I)
+    if grep -qE 'ID=debian|ID=ubuntu' /etc/os-release; then
+      CURRENT_IP=$(hostname -I | awk '{print $1}')
+    # Check for Alpine (uses ip command)
+    elif grep -q 'ID=alpine' /etc/os-release; then
+      CURRENT_IP=$(ip -4 addr show eth0 | awk '/inet / {print $2}' | cut -d/ -f1 | head -n 1)
+    else
+      CURRENT_IP="Unknown"
+    fi
+  fi
+  echo "$CURRENT_IP"
+}
+
+# Function to update the IP address in the MOTD file
+update_motd_ip() {
+  MOTD_FILE="/etc/motd"
+
+  if [ -f "$MOTD_FILE" ]; then
+    # Remove existing IP Address lines to prevent duplication
+    sed -i '/IP Address:/d' "$MOTD_FILE"
+
+    IP=$(get_current_ip)
+    # Add the new IP address
+    echo -e "${TAB}${NETWORK}${YW} IP Address: ${GN}${IP}${CL}" >>"$MOTD_FILE"
+  fi
+}
+
+# This function checks if the script is running through SSH and prompts the user to confirm if they want to proceed or exit.
+ssh_check() {
+  if [ -n "${SSH_CLIENT:+x}" ]; then
+    if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "SSH DETECTED" --yesno "It's advisable to utilize the Proxmox shell rather than SSH, as there may be potential complications with variable retrieval. Proceed using SSH?" 10 72; then
+      whiptail --backtitle "Proxmox VE Helper Scripts" --msgbox --title "Proceed using SSH" "You've chosen to proceed using SSH. If any issues arise, please run the script in the Proxmox shell before creating a repository issue." 10 72
+    else
+      clear
+      echo "Exiting due to SSH usage. Please consider using the Proxmox shell."
+      exit
+    fi
+  fi
+}
+
+base_settings() {
+  # Default Settings
+  CT_TYPE=${var_unprivileged:-"1"}
+  DISK_SIZE=${var_disk:-"4"}
+  CORE_COUNT=${var_cpu:-"1"}
+  RAM_SIZE=${var_ram:-"1024"}
+  VERBOSE=${var_verbose:-"${1:-no}"}
+  PW=${var_pw:-""}
+  CT_ID=${var_ctid:-$NEXTID}
+  HN=${var_hostname:-$NSAPP}
+  BRG=${var_brg:-"vmbr0"}
+  NET=${var_net:-"dhcp"}
+  IPV6_METHOD=${var_ipv6_method:-"none"}
+  IPV6_STATIC=${var_ipv6_static:-""}
+  GATE=${var_gateway:-""}
+  APT_CACHER=${var_apt_cacher:-""}
+  APT_CACHER_IP=${var_apt_cacher_ip:-""}
+  MTU=${var_mtu:-""}
+  SD=${var_storage:-""}
+  NS=${var_ns:-""}
+  MAC=${var_mac:-""}
+  VLAN=${var_vlan:-""}
+  SSH=${var_ssh:-"no"}
+  SSH_AUTHORIZED_KEY=${var_ssh_authorized_key:-""}
+  UDHCPC_FIX=${var_udhcpc_fix:-""}
+  TAGS="community-script;${var_tags:-}"
+  ENABLE_FUSE=${var_fuse:-"${1:-no}"}
+  ENABLE_TUN=${var_tun:-"${1:-no}"}
+
+  # Since these 2 are only defined outside of default_settings function, we add a temporary fallback. TODO: To align everything, we should add these as constant variables (e.g. OSTYPE and OSVERSION), but that would currently require updating the default_settings function for all existing scripts
+  if [ -z "$var_os" ]; then
+    var_os="debian"
+  fi
+  if [ -z "$var_version" ]; then
+    var_version="12"
+  fi
+}
+
+write_config() {
+  mkdir -p /opt/community-scripts
+  # This function writes the configuration to a file.
+  if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "Write configfile" --yesno "Do you want to write the selections to a config file?" 10 60; then
+    FILEPATH="/opt/community-scripts/${NSAPP}.conf"
+    [[ "$GATE" =~ ",gw=" ]] && local GATE="${GATE##,gw=}"
+
+    # Strip prefixes from parameters for config file storage
+    local SD_VALUE="${SD}"
+    local NS_VALUE="${NS}"
+    local MAC_VALUE="${MAC}"
+    local VLAN_VALUE="${VLAN}"
+    [[ "$SD" =~ ^-searchdomain= ]] && SD_VALUE="${SD#-searchdomain=}"
+    [[ "$NS" =~ ^-nameserver= ]] && NS_VALUE="${NS#-nameserver=}"
+    [[ "$MAC" =~ ^,hwaddr= ]] && MAC_VALUE="${MAC#,hwaddr=}"
+    [[ "$VLAN" =~ ^,tag= ]] && VLAN_VALUE="${VLAN#,tag=}"
+
+    if [[ ! -f $FILEPATH ]]; then
+      cat <<EOF >"$FILEPATH"
+# ${NSAPP} Configuration File
+# Generated on $(date)
+
+CT_TYPE="${CT_TYPE}"
+DISK_SIZE="${DISK_SIZE}"
+CORE_COUNT="${CORE_COUNT}"
+RAM_SIZE="${RAM_SIZE}"
+VERBOSE="${VERBOSE}"
+PW="${PW##-password }"
+#CT_ID=$NEXTID
+HN="${HN}"
+BRG="${BRG}"
+NET="${NET}"
+IPV6_METHOD="${IPV6_METHOD:-none}"
+# Set this only if using "IPV6_METHOD=static"
+#IPV6STATIC="fd00::1234/64"
+
+GATE="${GATE:-none}"
+APT_CACHER_IP="${APT_CACHER_IP:-none}"
+MTU="${MTU:-1500}"
+SD="${SD_VALUE:-none}"
+NS="${NS_VALUE:-none}"
+MAC="${MAC_VALUE:-none}"
+VLAN="${VLAN_VALUE:-none}"
+SSH="${SSH}"
+SSH_AUTHORIZED_KEY="${SSH_AUTHORIZED_KEY}"
+TAGS="${TAGS:-none}"
+ENABLE_FUSE="$ENABLE_FUSE"
+ENABLE_TUN="$ENABLE_TUN"
+EOF
+
+      echo -e "${INFO}${BOLD}${GN}Writing configuration to ${FILEPATH}${CL}"
+    else
+      echo -e "${INFO}${BOLD}${RD}Configuration file already exists at ${FILEPATH}${CL}"
+      if whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "Overwrite configfile" --yesno "Do you want to overwrite the existing config file?" 10 60; then
+        rm -f "$FILEPATH"
+        cat <<EOF >"$FILEPATH"
+# ${NSAPP} Configuration File
+# Generated on $(date)
+
+CT_TYPE="${CT_TYPE}"
+DISK_SIZE="${DISK_SIZE}"
+CORE_COUNT="${CORE_COUNT}"
+RAM_SIZE="${RAM_SIZE}"
+VERBOSE="${VERBOSE}"
+PW="${PW##-password }"
+#CT_ID=$NEXTID
+HN="${HN}"
+BRG="${BRG}"
+NET="${NET}"
+IPV6_METHOD="${IPV6_METHOD:-none}"
+
+# Set this only if using "IPV6_METHOD=static"
+#IPV6STATIC="fd00::1234/64"
+
+GATE="${GATE:-none}"
+APT_CACHER_IP="${APT_CACHER_IP:-none}"
+MTU="${MTU:-1500}"
+SD="${SD_VALUE:-none}"
+NS="${NS_VALUE:-none}"
+MAC="${MAC_VALUE:-none}"
+VLAN="${VLAN_VALUE:-none}"
+SSH="${SSH}"
+SSH_AUTHORIZED_KEY="${SSH_AUTHORIZED_KEY}"
+TAGS="${TAGS:-none}"
+ENABLE_FUSE="$ENABLE_FUSE"
+ENABLE_TUN="$ENABLE_TUN"
+EOF
+        echo -e "${INFO}${BOLD}${GN}Writing configuration to ${FILEPATH}${CL}"
+      else
+        echo -e "${INFO}${BOLD}${RD}Configuration file not overwritten${CL}"
+      fi
+    fi
+  fi
+}
+
+# This function displays the default values for various settings.
+echo_default() {
+  # Convert CT_TYPE to description
+  CT_TYPE_DESC="Unprivileged"
+  if [ "$CT_TYPE" -eq 0 ]; then
+    CT_TYPE_DESC="Privileged"
+  fi
+
+  # Output the selected values with icons
+  echo -e "${CONTAINERID}${BOLD}${DGN}Container ID: ${BGN}${CT_ID}${CL}"
+  echo -e "${OS}${BOLD}${DGN}Operating System: ${BGN}$var_os ($var_version)${CL}"
+  echo -e "${CONTAINERTYPE}${BOLD}${DGN}Container Type: ${BGN}$CT_TYPE_DESC${CL}"
+  echo -e "${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE} GB${CL}"
+  echo -e "${CPUCORE}${BOLD}${DGN}CPU Cores: ${BGN}${CORE_COUNT}${CL}"
+  echo -e "${RAMSIZE}${BOLD}${DGN}RAM Size: ${BGN}${RAM_SIZE} MiB${CL}"
+  if [ "$VERBOSE" == "yes" ]; then
+    echo -e "${SEARCH}${BOLD}${DGN}Verbose Mode: ${BGN}Enabled${CL}"
+  fi
+  echo -e "${CREATING}${BOLD}${BL}Creating a ${APP} LXC using the above default settings${CL}"
+  echo -e "  "
+}
+
+# This function is called when the user decides to exit the script. It clears the screen and displays an exit message.
+exit_script() {
+  clear
+  echo -e "\n${CROSS}${RD}User exited script${CL}\n"
+  exit
+}
+
+
+install_script() {
+  pve_check
+  shell_check
+  root_check
+  arch_check
+  #ssh_check
+  maxkeys_check
+
+
+  
+
+  if systemctl is-active -q ping-instances.service; then
+    systemctl -q stop ping-instances.service
+  fi
+  NEXTID=$(pvesh get /cluster/nextid)
+  timezone=$(cat /etc/timezone)
+  #header_info
+  echo "TEST"
+  while true; do
+
+    TMP_CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" \
+      --title "SETTINGS" \
+      --menu "Choose an option:" 20 60 6 \
+      "1" "Default Settings" \
+      "2" "Default Settings (with verbose)" \
+      "3" "Advanced Settings" \
+      "4" "Exit" \
+      --default-item "1" 3>&1 1>&2 2>&3) || true
+
+    if [ -z "$TMP_CHOICE" ]; then
+      echo -e "\n${CROSS}${RD}Menu canceled. Exiting script.${CL}\n"
+      exit 0
+    fi
+
+    CHOICE="$TMP_CHOICE"
+
+    case $CHOICE in
+    1)
+      header_info
+      echo -e "${DEFAULT}${BOLD}${BL}Using Default Settings on node $PVEHOST_NAME${CL}"
+      VERBOSE="no"
+      METHOD="default"
+      base_settings "$VERBOSE"
+      echo_default
+      break
+      ;;
+    2)
+      header_info
+      echo -e "${DEFAULT}${BOLD}${BL}Using Default Settings on node $PVEHOST_NAME (${VERBOSE_CROPPED}Verbose)${CL}"
+      VERBOSE="yes"
+      METHOD="default"
+      base_settings "$VERBOSE"
+      echo_default
+      break
+      ;;
+    3)
+      header_info
+      echo -e "${ADVANCED}${BOLD}${RD}Using Advanced Settings on node $PVEHOST_NAME${CL}"
+      METHOD="advanced"
+      base_settings
+      advanced_settings
+      break
+      ;;
+    4)
+      echo -e "\n${CROSS}${RD}Script terminated. Have a great day!${CL}\n"
+      exit 0
+      ;;
+    *)
+      echo -e "\n${CROSS}${RD}Invalid option, please try again.${CL}\n"
+      ;;
+    esac
+  done
+}
+
+check_container_resources() {
+  # Check actual RAM & Cores
+  current_ram=$(free -m | awk 'NR==2{print $2}')
+  current_cpu=$(nproc)
+
+  # Check whether the current RAM is less than the required RAM or the CPU cores are less than required
+  if [[ "$current_ram" -lt "$var_ram" ]] || [[ "$current_cpu" -lt "$var_cpu" ]]; then
+    echo -e "\n${INFO}${HOLD} ${GN}Required: ${var_cpu} CPU, ${var_ram}MB RAM ${CL}| ${RD}Current: ${current_cpu} CPU, ${current_ram}MB RAM${CL}"
+    echo -e "${YWB}Please ensure that the ${APP} LXC is configured with at least ${var_cpu} vCPU and ${var_ram} MB RAM for the build process.${CL}\n"
+    echo -ne "${INFO}${HOLD} May cause data loss! ${INFO} Continue update with under-provisioned LXC? [y/N] "
+    read -r prompt
+    if [[ ! "${prompt,,}" =~ ^(y|yes)$ ]]; then
+      echo -e "${CROSS}${HOLD} ${YWB}Exiting based on user input.${CL}"
+      exit 1
+    fi
+  else
+    echo -e ""
+  fi
+}
+
+check_container_storage() {
+  # Check if the /boot partition is more than 80% full
+  total_size=$(df /boot --output=size | tail -n 1)
+  local used_size=$(df /boot --output=used | tail -n 1)
+  usage=$((100 * used_size / total_size))
+  if ((usage > 80)); then
+    # Prompt the user for confirmation to continue
+    echo -e "${INFO}${HOLD} ${YWB}Warning: Storage is dangerously low (${usage}%).${CL}"
+    echo -ne "Continue anyway? [y/N] "
+    read -r prompt
+    if [[ ! "${prompt,,}" =~ ^(y|yes)$ ]]; then
+      echo -e "${CROSS}${HOLD}${YWB}Exiting based on user input.${CL}"
+      exit 1
+    fi
+  fi
+}
+
+start() {
+  source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/tools.func)
+  if command -v pveversion >/dev/null 2>&1; then
+    install_script
+  else
+    CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "${APP} LXC Update/Setting" --menu \
+      "Support/Update functions for ${APP} LXC. Choose an option:" \
+      12 60 3 \
+      "1" "YES (Silent Mode)" \
+      "2" "YES (Verbose Mode)" \
+      "3" "NO (Cancel Update)" --nocancel --default-item "1" 3>&1 1>&2 2>&3)
+
+    case "$CHOICE" in
+    1)
+      VERBOSE="no"
+      set_std_mode
+      ;;
+    2)
+      VERBOSE="yes"
+      set_std_mode
+      ;;
+    3)
+      clear
+      exit_script
+      exit
+      ;;
+    esac
+    update_script
+  fi
+}
+
+# This function collects user settings and integrates all the collected information.
+build_container() {
+  #  if [ "$VERBOSE" == "yes" ]; then set -x; fi
+
+  NET_STRING="-net0 name=eth0,bridge=$BRG$MAC,ip=$NET$GATE$VLAN$MTU"
+  case "$IPV6_METHOD" in
+  auto) NET_STRING="$NET_STRING,ip6=auto" ;;
+  dhcp) NET_STRING="$NET_STRING,ip6=dhcp" ;;
+  static)
+    NET_STRING="$NET_STRING,ip6=$IPV6_ADDR"
+    [ -n "$IPV6_GATE" ] && NET_STRING="$NET_STRING,gw6=$IPV6_GATE"
+    ;;
+  none) ;;
+  esac
+  if [ "$CT_TYPE" == "1" ]; then
+    FEATURES="keyctl=1,nesting=1"
+  else
+    FEATURES="nesting=1"
+  fi
+
+  if [ "$ENABLE_FUSE" == "yes" ]; then
+    FEATURES="$FEATURES,fuse=1"
+  fi
+
+
+  TEMP_DIR=$(mktemp -d)
+  pushd "$TEMP_DIR" >/dev/null
+  if [ "$var_os" == "alpine" ]; then
+    export FUNCTIONS_FILE_PATH="$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/alpine-install.func)"
+  else
+    export FUNCTIONS_FILE_PATH="$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/install.func)"
+  fi
+
+  export DIAGNOSTICS="$DIAGNOSTICS"
+  export RANDOM_UUID="$RANDOM_UUID"
+  export CACHER="$APT_CACHER"
+  export CACHER_IP="$APT_CACHER_IP"
+  export tz="$timezone"
+  export APPLICATION="$APP"
+  export app="$NSAPP"
+  export PASSWORD="$PW"
+  export VERBOSE="$VERBOSE"
+  export SSH_ROOT="${SSH}"
+  export SSH_AUTHORIZED_KEY
+  export CTID="$CT_ID"
+  export CTTYPE="$CT_TYPE"
+  export ENABLE_FUSE="$ENABLE_FUSE"
+  export ENABLE_TUN="$ENABLE_TUN"
+  export PCT_OSTYPE="$var_os"
+  export PCT_OSVERSION="$var_version"
+  export PCT_DISK_SIZE="$DISK_SIZE"
+  export PCT_OPTIONS="
+    -features $FEATURES
+    -hostname $HN
+    -tags $TAGS
+    $SD
+    $NS
+    $NET_STRING
+    -onboot 1
+    -cores $CORE_COUNT
+    -memory $RAM_SIZE
+    -unprivileged $CT_TYPE
+    $PW
+  "
+  # This executes create_lxc.sh and creates the container and .conf file
+  bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/create_lxc.sh)" $?
+
+  LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
+
+  # USB passthrough for privileged LXC (CT_TYPE=0)
+  if [ "$CT_TYPE" == "0" ]; then
+    cat <<EOF >>"$LXC_CONFIG"
+# USB passthrough
+lxc.cgroup2.devices.allow: a
+lxc.cap.drop:
+lxc.cgroup2.devices.allow: c 188:* rwm
+lxc.cgroup2.devices.allow: c 189:* rwm
+lxc.mount.entry: /dev/serial/by-id  dev/serial/by-id  none bind,optional,create=dir
+lxc.mount.entry: /dev/ttyUSB0       dev/ttyUSB0       none bind,optional,create=file
+lxc.mount.entry: /dev/ttyUSB1       dev/ttyUSB1       none bind,optional,create=file
+lxc.mount.entry: /dev/ttyACM0       dev/ttyACM0       none bind,optional,create=file
+lxc.mount.entry: /dev/ttyACM1       dev/ttyACM1       none bind,optional,create=file
+EOF
+  fi
+
+  # VAAPI passthrough for privileged containers or known apps
+  VAAPI_APPS=(
+    "immich"
+    "Channels"
+    "Emby"
+    "ErsatzTV"
+    "Frigate"
+    "Jellyfin"
+    "Plex"
+    "Scrypted"
+    "Tdarr"
+    "Unmanic"
+    "Ollama"
+    "FileFlows"
+    "Open WebUI"
+  )
+
+  is_vaapi_app=false
+  for vaapi_app in "${VAAPI_APPS[@]}"; do
+    if [[ "$APP" == "$vaapi_app" ]]; then
+      is_vaapi_app=true
+      break
+    fi
+  done
+
+  if ([ "$CT_TYPE" == "0" ] || [ "$is_vaapi_app" == "true" ]) &&
+    ([[ -e /dev/dri/renderD128 ]] || [[ -e /dev/dri/card0 ]] || [[ -e /dev/fb0 ]]); then
+
+    echo ""
+    msg_custom "⚙️ " "\e[96m" "Configuring VAAPI passthrough for LXC container"
+    if [ "$CT_TYPE" != "0" ]; then
+      msg_custom "⚠️ " "\e[33m" "Container is unprivileged – VAAPI passthrough may not work without additional host configuration (e.g., idmap)."
+    fi
+    msg_custom "ℹ️ " "\e[96m" "VAAPI enables GPU hardware acceleration (e.g., for video transcoding in Jellyfin or Plex)."
+    echo ""
+    read -rp "➤ Automatically mount all available VAAPI devices? [Y/n]: " VAAPI_ALL
+
+    if [[ "$VAAPI_ALL" =~ ^[Yy]$|^$ ]]; then
+      if [ "$CT_TYPE" == "0" ]; then
+        # PRV Container → alles zulässig
+        [[ -e /dev/dri/renderD128 ]] && {
+          echo "lxc.cgroup2.devices.allow: c 226:128 rwm" >>"$LXC_CONFIG"
+          echo "lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,create=file" >>"$LXC_CONFIG"
+        }
+        [[ -e /dev/dri/card0 ]] && {
+          echo "lxc.cgroup2.devices.allow: c 226:0 rwm" >>"$LXC_CONFIG"
+          echo "lxc.mount.entry: /dev/dri/card0 dev/dri/card0 none bind,optional,create=file" >>"$LXC_CONFIG"
+        }
+        [[ -e /dev/fb0 ]] && {
+          echo "lxc.cgroup2.devices.allow: c 29:0 rwm" >>"$LXC_CONFIG"
+          echo "lxc.mount.entry: /dev/fb0 dev/fb0 none bind,optional,create=file" >>"$LXC_CONFIG"
+        }
+        [[ -d /dev/dri ]] && {
+          echo "lxc.mount.entry: /dev/dri dev/dri none bind,optional,create=dir" >>"$LXC_CONFIG"
+        }
+      else
+        # UNPRV Container → nur devX für UI
+        [[ -e /dev/dri/card0 ]] && echo "dev0: /dev/dri/card0,gid=44" >>"$LXC_CONFIG"
+        [[ -e /dev/dri/card1 ]] && echo "dev0: /dev/dri/card1,gid=44" >>"$LXC_CONFIG"
+        [[ -e /dev/dri/renderD128 ]] && echo "dev1: /dev/dri/renderD128,gid=104" >>"$LXC_CONFIG"
+      fi
+    fi
+
+  fi
+  if [ "$CT_TYPE" == "1" ] && [ "$is_vaapi_app" == "true" ]; then
+    if [[ -e /dev/dri/card0 ]]; then
+      echo "dev0: /dev/dri/card0,gid=44" >>"$LXC_CONFIG"
+    elif [[ -e /dev/dri/card1 ]]; then
+      echo "dev0: /dev/dri/card1,gid=44" >>"$LXC_CONFIG"
+    fi
+    if [[ -e /dev/dri/renderD128 ]]; then
+      echo "dev1: /dev/dri/renderD128,gid=104" >>"$LXC_CONFIG"
+    fi
+  fi
+
+  # TUN device passthrough
+  if [ "$ENABLE_TUN" == "yes" ]; then
+    cat <<EOF >>"$LXC_CONFIG"
+lxc.cgroup2.devices.allow: c 10:200 rwm
+lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+EOF
+  fi
+
+  # This starts the container and executes <app>-install.sh
+  msg_info "Starting LXC Container"
+  pct start "$CTID"
+
+  # wait for status 'running'
+  for i in {1..10}; do
+    if pct status "$CTID" | grep -q "status: running"; then
+      msg_ok "Started LXC Container"
+      break
+    fi
+    sleep 1
+    if [ "$i" -eq 10 ]; then
+      msg_error "LXC Container did not reach running state"
+      exit 1
+    fi
+  done
+
+  if [ "$var_os" != "alpine" ]; then
+    msg_info "Waiting for network in LXC container"
+    for i in {1..10}; do
+      # 1. Primary check: ICMP ping (fastest, but may be blocked by ISP/firewall)
+      if pct exec "$CTID" -- ping -c1 -W1 deb.debian.org >/dev/null 2>&1; then
+        msg_ok "Network in LXC is reachable (ping)"
+        break
+      fi
+      # Wait and retry if not reachable yet
+      if [ "$i" -lt 10 ]; then
+        msg_warn "No network in LXC yet (try $i/10) – waiting..."
+        sleep 3
+      else
+        # After 10 unsuccessful ping attempts, try HTTP connectivity via wget as fallback
+        msg_warn "Ping failed 10 times. Trying HTTP connectivity check (wget) as fallback..."
+        if pct exec "$CTID" -- wget -q --spider http://deb.debian.org; then
+          msg_ok "Network in LXC is reachable (wget fallback)"
+        else
+          msg_error "No network in LXC after all checks."
+          read -r -p "Set fallback DNS (1.1.1.1/8.8.8.8)? [y/N]: " choice
+          case "$choice" in
+          [yY]*)
+            pct set "$CTID" --nameserver 1.1.1.1
+            pct set "$CTID" --nameserver 8.8.8.8
+            # Final attempt with wget after DNS change
+            if pct exec "$CTID" -- wget -q --spider http://deb.debian.org; then
+              msg_ok "Network reachable after DNS fallback"
+            else
+              msg_error "Still no network/DNS in LXC! Aborting customization."
+              exit_script
+            fi
+            ;;
+          *)
+            msg_error "Aborted by user – no DNS fallback set."
+            exit_script
+            ;;
+          esac
+        fi
+        break
+      fi
+    done
+  fi
+
+  msg_info "Customizing LXC Container"
+  : "${tz:=Etc/UTC}"
+  if [ "$var_os" == "alpine" ]; then
+    sleep 3
+    pct exec "$CTID" -- /bin/sh -c 'cat <<EOF >/etc/apk/repositories
+http://dl-cdn.alpinelinux.org/alpine/latest-stable/main
+http://dl-cdn.alpinelinux.org/alpine/latest-stable/community
+EOF'
+    pct exec "$CTID" -- ash -c "apk add bash newt curl openssh nano mc ncurses jq >/dev/null"
+  else
+    sleep 3
+    pct exec "$CTID" -- bash -c "sed -i '/$LANG/ s/^# //' /etc/locale.gen"
+    pct exec "$CTID" -- bash -c "locale_line=\$(grep -v '^#' /etc/locale.gen | grep -E '^[a-zA-Z]' | awk '{print \$1}' | head -n 1) && \
+    echo LANG=\$locale_line >/etc/default/locale && \
+    locale-gen >/dev/null && \
+    export LANG=\$locale_line"
+
+    if [[ -z "${tz:-}" ]]; then
+      tz=$(timedatectl show --property=Timezone --value 2>/dev/null || echo "Etc/UTC")
+    fi
+    if pct exec "$CTID" -- test -e "/usr/share/zoneinfo/$tz"; then
+      pct exec "$CTID" -- bash -c "tz='$tz'; echo \"\$tz\" >/etc/timezone && ln -sf \"/usr/share/zoneinfo/\$tz\" /etc/localtime"
+    else
+      msg_warn "Skipping timezone setup – zone '$tz' not found in container"
+    fi
+
+    pct exec "$CTID" -- bash -c "apt-get update >/dev/null && apt-get install -y sudo curl mc gnupg2 jq >/dev/null"
+  fi
+  msg_ok "Customized LXC Container"
+
+  lxc-attach -n "$CTID" -- bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/${var_install}.sh)"
+}
+
+# This function sets the description of the container.
+description() {
+  IP=$(pct exec "$CTID" ip a s dev eth0 | awk '/inet / {print $2}' | cut -d/ -f1)
+
+  # Generate LXC Description
+  DESCRIPTION=$(
+    cat <<EOF
+<div align='center'>
+  <a href='https://Helper-Scripts.com' target='_blank' rel='noopener noreferrer'>
+    <img src='https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/images/logo-81x112.png' alt='Logo' style='width:81px;height:112px;'/>
+  </a>
+
+  <h2 style='font-size: 24px; margin: 20px 0;'>${APP} LXC</h2>
+
+  <p style='margin: 16px 0;'>
+    <a href='https://ko-fi.com/community_scripts' target='_blank' rel='noopener noreferrer'>
+      <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />
+    </a>
+  </p>
+
+  <span style='margin: 0 10px;'>
+    <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://github.com/community-scripts/ProxmoxVE' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
+  </span>
+  <span style='margin: 0 10px;'>
+    <i class="fa fa-comments fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://github.com/community-scripts/ProxmoxVE/discussions' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Discussions</a>
+  </span>
+  <span style='margin: 0 10px;'>
+    <i class="fa fa-exclamation-circle fa-fw" style="color: #f5f5f5;"></i>
+    <a href='https://github.com/community-scripts/ProxmoxVE/issues' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>Issues</a>
+  </span>
+</div>
+EOF
+  )
+
+  # Set Description in LXC
+  pct set "$CTID" -description "$DESCRIPTION"
+
+  if [[ -f /etc/systemd/system/ping-instances.service ]]; then
+    systemctl start ping-instances.service
+  fi
+
+}

@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { api } from '~/trpc/react';
+import { Terminal as XTerm } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import '@xterm/xterm/css/xterm.css';
 
 interface TerminalProps {
   scriptPath: string;
@@ -17,70 +20,203 @@ interface TerminalMessage {
 export function Terminal({ scriptPath, onClose }: TerminalProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [output, setOutput] = useState<string[]>([]);
-  const [executionId] = useState(() => `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const xtermRef = useRef<XTerm | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const outputRef = useRef<HTMLDivElement>(null);
+  const [executionId] = useState(() => `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const isConnectingRef = useRef<boolean>(false);
+  const hasConnectedRef = useRef<boolean>(false);
 
   const scriptName = scriptPath.split('/').pop() || scriptPath.split('\\').pop() || 'Unknown Script';
 
   useEffect(() => {
-    // Connect to WebSocket
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws/script-execution`;
-    
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+    // Initialize xterm.js terminal with proper timing
+    if (!terminalRef.current || xtermRef.current) return;
 
-    ws.onopen = () => {
-      console.log('WebSocket connected');
-      setIsConnected(true);
+    // Use setTimeout to ensure DOM is fully ready
+    const initTerminal = () => {
+      if (!terminalRef.current || xtermRef.current) return;
+
+      const terminal = new XTerm({
+        theme: {
+          background: '#000000',
+          foreground: '#00ff00',
+          cursor: '#00ff00',
+        },
+        fontSize: 14,
+        fontFamily: 'Courier New, monospace',
+        cursorBlink: true,
+        cursorStyle: 'block',
+        scrollback: 1000,
+        tabStopWidth: 4,
+      });
+
+      // Add addons
+      const fitAddon = new FitAddon();
+      const webLinksAddon = new WebLinksAddon();
+      terminal.loadAddon(fitAddon);
+      terminal.loadAddon(webLinksAddon);
+
+      // Open terminal
+      terminal.open(terminalRef.current);
+      
+      // Fit after a small delay to ensure proper sizing
+      setTimeout(() => {
+        fitAddon.fit();
+      }, 100);
+
+      // Store references
+      xtermRef.current = terminal;
+      fitAddonRef.current = fitAddon;
+
+      // Handle terminal input
+      terminal.onData((data) => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            action: 'input',
+            executionId,
+            input: data
+          }));
+        }
+      });
+
+      // Handle terminal resize
+      const handleResize = () => {
+        if (fitAddonRef.current) {
+          fitAddonRef.current.fit();
+        }
+      };
+
+      window.addEventListener('resize', handleResize);
+
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        terminal.dispose();
+      };
     };
 
-    ws.onmessage = (event) => {
-      try {
-        const message: TerminalMessage = JSON.parse(event.data);
-        handleMessage(message);
-      } catch (error) {
-        console.error('Error parsing WebSocket message:', error);
-      }
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
-      setIsConnected(false);
-      setIsRunning(false);
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      setIsConnected(false);
-    };
+    // Initialize with a small delay
+    const timeoutId = setTimeout(initTerminal, 50);
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
+      clearTimeout(timeoutId);
+      if (xtermRef.current) {
+        xtermRef.current.dispose();
+        xtermRef.current = null;
+        fitAddonRef.current = null;
       }
     };
   }, []);
 
+  useEffect(() => {
+    // Prevent multiple connections in React Strict Mode
+    if (hasConnectedRef.current || isConnectingRef.current || (wsRef.current && wsRef.current.readyState === WebSocket.OPEN)) {
+      console.log('WebSocket already connected, connecting, or has connected, skipping...');
+      return;
+    }
+
+    // Close any existing connection first
+    if (wsRef.current) {
+      console.log('Closing existing WebSocket connection');
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    isConnectingRef.current = true;
+    hasConnectedRef.current = true;
+
+    // Small delay to prevent rapid reconnection
+    const connectWithDelay = () => {
+      // Connect to WebSocket
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/script-execution`;
+      
+      console.log('Connecting to WebSocket:', wsUrl);
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        console.log('WebSocket connected successfully');
+        console.log('Script path:', scriptPath);
+        console.log('Execution ID:', executionId);
+        setIsConnected(true);
+        isConnectingRef.current = false;
+        
+        // Send start message immediately after connection
+        ws.send(JSON.stringify({
+          action: 'start',
+          scriptPath,
+          executionId
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const message: TerminalMessage = JSON.parse(event.data);
+          console.log('Received message:', message);
+          handleMessage(message);
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
+      };
+
+      ws.onclose = (event) => {
+        console.log('WebSocket disconnected:', event.code, event.reason);
+        setIsConnected(false);
+        setIsRunning(false);
+        isConnectingRef.current = false;
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        console.error('WebSocket readyState:', ws.readyState);
+        setIsConnected(false);
+        isConnectingRef.current = false;
+      };
+    };
+
+    // Add small delay to prevent rapid reconnection
+    const timeoutId = setTimeout(connectWithDelay, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      isConnectingRef.current = false;
+      hasConnectedRef.current = false;
+      if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+        console.log('Cleaning up WebSocket connection');
+        wsRef.current.close();
+      }
+    };
+  }, [scriptPath, executionId]);
+
   const handleMessage = (message: TerminalMessage) => {
+    if (!xtermRef.current) return;
+
     const timestamp = new Date(message.timestamp).toLocaleTimeString();
     const prefix = `[${timestamp}] `;
     
     switch (message.type) {
       case 'start':
-        setOutput(prev => [...prev, `${prefix}🚀 ${message.data}`]);
+        xtermRef.current.writeln(`${prefix}🚀 ${message.data}`);
         setIsRunning(true);
         break;
       case 'output':
-        setOutput(prev => [...prev, message.data]);
+        // Write directly to terminal - xterm.js handles ANSI codes natively
+        xtermRef.current.write(message.data);
         break;
       case 'error':
-        setOutput(prev => [...prev, `${prefix}❌ ${message.data}`]);
+        // Check if this looks like ANSI terminal output (contains escape codes)
+        if (message.data.includes('\x1B[') || message.data.includes('\u001b[')) {
+          // This is likely terminal output sent to stderr, treat it as normal output
+          xtermRef.current.write(message.data);
+        } else {
+          // This is a real error, show it with error prefix
+          xtermRef.current.writeln(`${prefix}❌ ${message.data}`);
+        }
         break;
       case 'end':
-        setOutput(prev => [...prev, `${prefix}✅ ${message.data}`]);
+        xtermRef.current.writeln(`${prefix}✅ ${message.data}`);
         setIsRunning(false);
         break;
     }
@@ -106,15 +242,10 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
   };
 
   const clearOutput = () => {
-    setOutput([]);
-  };
-
-  // Auto-scroll to bottom when new output arrives
-  useEffect(() => {
-    if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight;
+    if (xtermRef.current) {
+      xtermRef.current.clear();
     }
-  }, [output]);
+  };
 
   return (
     <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
@@ -141,23 +272,10 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
 
       {/* Terminal Output */}
       <div 
-        ref={outputRef}
-        className="h-96 overflow-y-auto p-4 font-mono text-sm"
-        style={{ backgroundColor: '#000000', color: '#00ff00' }}
-      >
-        {output.length === 0 ? (
-          <div className="text-gray-500">
-            <p>Terminal ready. Click "Start Script" to begin execution.</p>
-            <p className="mt-2">Script: {scriptPath}</p>
-          </div>
-        ) : (
-          output.map((line, index) => (
-            <div key={index} className="whitespace-pre-wrap">
-              {line}
-            </div>
-          ))
-        )}
-      </div>
+        ref={terminalRef}
+        className="h-96 w-full"
+        style={{ minHeight: '384px' }}
+      />
 
       {/* Terminal Controls */}
       <div className="bg-gray-800 px-4 py-2 flex items-center justify-between border-t border-gray-700">

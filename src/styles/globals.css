@@ -4,3 +4,19 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
+
+/* Terminal-specific styles for ANSI escape code rendering */
+.terminal-output {
+  font-family: 'Courier New', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  line-height: 1.2;
+}
+
+.terminal-output span {
+  display: inline;
+}
+
+/* Ensure proper rendering of ANSI colors */
+.terminal-output * {
+  color: inherit;
+  background-color: inherit;
+}
