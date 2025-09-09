@@ -1,4 +1,4 @@
-#How to run this Alpha Software
+# How to run this Alpha Software
 
 You need npm and git installed on your PVE host
 
