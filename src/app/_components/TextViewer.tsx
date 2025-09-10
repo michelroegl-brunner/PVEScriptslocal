@@ -120,7 +120,7 @@ export function TextViewer({ scriptName, isOpen, onClose }: TextViewerProps) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden flex flex-col">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-lg text-gray-600">Loading script content...</div>
@@ -130,7 +130,7 @@ export function TextViewer({ scriptName, isOpen, onClose }: TextViewerProps) {
               <div className="text-lg text-red-600">Error: {error}</div>
             </div>
           ) : (
-            <div className="h-full overflow-auto">
+            <div className="flex-1 overflow-auto">
               {activeTab === 'ct' && scriptContent.ctScript ? (
                 <SyntaxHighlighter
                   language="bash"
@@ -140,8 +140,7 @@ export function TextViewer({ scriptName, isOpen, onClose }: TextViewerProps) {
                     padding: '1rem',
                     fontSize: '14px',
                     lineHeight: '1.5',
-                    height: '100%',
-                    overflow: 'auto'
+                    minHeight: '100%'
                   }}
                   showLineNumbers={true}
                   wrapLines={true}
@@ -157,8 +156,7 @@ export function TextViewer({ scriptName, isOpen, onClose }: TextViewerProps) {
                     padding: '1rem',
                     fontSize: '14px',
                     lineHeight: '1.5',
-                    height: '100%',
-                    overflow: 'auto'
+                    minHeight: '100%'
                   }}
                   showLineNumbers={true}
                   wrapLines={true}
