@@ -3,6 +3,7 @@ import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { scriptManager } from "~/server/lib/scripts";
 import { gitManager } from "~/server/lib/git";
 import { githubService } from "~/server/services/github";
+import { localScriptsService } from "~/server/services/localScripts";
 
 export const scriptsRouter = createTRPCRouter({
   // Get all available scripts
@@ -58,12 +59,12 @@ export const scriptsRouter = createTRPCRouter({
       return scriptManager.getScriptsDirectoryInfo();
     }),
 
-  // GitHub-based script routes
-  // Get all script cards from GitHub repo
+  // Local script routes (using scripts/json directory)
+  // Get all script cards from local directory
   getScriptCards: publicProcedure
     .query(async () => {
       try {
-        const cards = await githubService.getScriptCards();
+        const cards = await localScriptsService.getScriptCards();
         return { success: true, cards };
       } catch (error) {
         console.error('Error in getScriptCards:', error);
@@ -75,11 +76,11 @@ export const scriptsRouter = createTRPCRouter({
       }
     }),
 
-  // Get all scripts from GitHub repo
+  // Get all scripts from local directory
   getAllScripts: publicProcedure
     .query(async () => {
       try {
-        const scripts = await githubService.getAllScripts();
+        const scripts = await localScriptsService.getAllScripts();
         return { success: true, scripts };
       } catch (error) {
         return {
@@ -90,12 +91,12 @@ export const scriptsRouter = createTRPCRouter({
       }
     }),
 
-  // Get script by slug from GitHub repo
+  // Get script by slug from local directory
   getScriptBySlug: publicProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ input }) => {
       try {
-        const script = await githubService.getScriptBySlug(input.slug);
+        const script = await localScriptsService.getScriptBySlug(input.slug);
         if (!script) {
           return {
             success: false,
@@ -113,20 +114,26 @@ export const scriptsRouter = createTRPCRouter({
       }
     }),
 
-  // Resync scripts from GitHub repo
+  // Resync scripts from GitHub repo to local directory
   resyncScripts: publicProcedure
     .mutation(async () => {
       try {
-        const scripts = await githubService.getAllScripts();
+        // First, try to get scripts from GitHub
+        const githubScripts = await githubService.getAllScripts();
+        
+        // Save scripts to local directory
+        await localScriptsService.saveScriptsFromGitHub(githubScripts);
+        
         return { 
           success: true, 
-          message: `Successfully synced ${scripts.length} scripts`,
-          count: scripts.length
+          message: `Successfully synced ${githubScripts.length} scripts from GitHub to local directory`,
+          count: githubScripts.length
         };
       } catch (error) {
+        console.error('Error in resyncScripts:', error);
         return {
           success: false,
-          error: error instanceof Error ? error.message : 'Failed to resync scripts',
+          error: error instanceof Error ? error.message : 'Failed to resync scripts. Make sure REPO_URL is set.',
           count: 0
         };
       }

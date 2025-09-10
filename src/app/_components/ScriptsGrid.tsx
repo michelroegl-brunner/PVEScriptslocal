@@ -48,8 +48,8 @@ export function ScriptsGrid() {
             {scriptCardsData?.error || 'Unknown error occurred'}
           </p>
           <div className="mt-4 text-xs text-gray-400">
-            <p>Make sure to set the REPO_URL environment variable.</p>
-            <p>Example: REPO_URL="https://github.com/username/repo"</p>
+            <p>No JSON files found in scripts/json directory.</p>
+            <p>Use the "Resync Scripts" button to download from GitHub.</p>
           </div>
         </div>
         <button
