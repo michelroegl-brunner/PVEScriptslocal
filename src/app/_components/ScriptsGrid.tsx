@@ -16,6 +16,14 @@ export function ScriptsGrid() {
     { enabled: !!selectedSlug }
   );
 
+  // Debug logging
+  console.log('ScriptsGrid render:', { 
+    isLoading, 
+    error: error?.message, 
+    scriptCardsData: scriptCardsData?.success, 
+    cardsCount: scriptCardsData?.cards?.length 
+  });
+
   const handleCardClick = (scriptCard: ScriptCardType) => {
     setSelectedSlug(scriptCard.slug);
     setIsModalOpen(true);

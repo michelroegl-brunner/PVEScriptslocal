@@ -12,18 +12,20 @@ export class GitHubService {
     this.branch = env.REPO_BRANCH;
     this.jsonFolder = env.JSON_FOLDER;
     
-    if (!this.repoUrl) {
-      throw new Error("REPO_URL environment variable is not set. Please set it to a valid GitHub repository URL.");
+    // Only validate GitHub URL if it's provided
+    if (this.repoUrl) {
+      // Extract owner and repo from the URL
+      const urlMatch = this.repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+      if (!urlMatch) {
+        throw new Error(`Invalid GitHub repository URL: ${this.repoUrl}`);
+      }
+      
+      const [, owner, repo] = urlMatch;
+      this.baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
+    } else {
+      // Set a dummy base URL if no REPO_URL is provided
+      this.baseUrl = "";
     }
-    
-    // Extract owner and repo from the URL
-    const urlMatch = this.repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
-    if (!urlMatch) {
-      throw new Error(`Invalid GitHub repository URL: ${this.repoUrl}`);
-    }
-    
-    const [, owner, repo] = urlMatch;
-    this.baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
   }
 
   private async fetchFromGitHub<T>(endpoint: string): Promise<T> {
@@ -42,6 +44,10 @@ export class GitHubService {
   }
 
   async getJsonFiles(): Promise<GitHubFile[]> {
+    if (!this.repoUrl) {
+      throw new Error('REPO_URL environment variable is not set. Cannot fetch from GitHub.');
+    }
+    
     try {
       const files = await this.fetchFromGitHub<GitHubFile[]>(
         `/contents/${this.jsonFolder}?ref=${this.branch}`
