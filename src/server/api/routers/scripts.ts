@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { scriptManager } from "~/server/lib/scripts";
 import { gitManager } from "~/server/lib/git";
+import { githubService } from "~/server/services/github";
 
 export const scriptsRouter = createTRPCRouter({
   // Get all available scripts
@@ -55,5 +56,78 @@ export const scriptsRouter = createTRPCRouter({
   getDirectoryInfo: publicProcedure
     .query(async () => {
       return scriptManager.getScriptsDirectoryInfo();
+    }),
+
+  // GitHub-based script routes
+  // Get all script cards from GitHub repo
+  getScriptCards: publicProcedure
+    .query(async () => {
+      try {
+        const cards = await githubService.getScriptCards();
+        return { success: true, cards };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch script cards',
+          cards: []
+        };
+      }
+    }),
+
+  // Get all scripts from GitHub repo
+  getAllScripts: publicProcedure
+    .query(async () => {
+      try {
+        const scripts = await githubService.getAllScripts();
+        return { success: true, scripts };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch scripts',
+          scripts: []
+        };
+      }
+    }),
+
+  // Get script by slug from GitHub repo
+  getScriptBySlug: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const script = await githubService.getScriptBySlug(input.slug);
+        if (!script) {
+          return {
+            success: false,
+            error: 'Script not found',
+            script: null
+          };
+        }
+        return { success: true, script };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch script',
+          script: null
+        };
+      }
+    }),
+
+  // Resync scripts from GitHub repo
+  resyncScripts: publicProcedure
+    .mutation(async () => {
+      try {
+        const scripts = await githubService.getAllScripts();
+        return { 
+          success: true, 
+          message: `Successfully synced ${scripts.length} scripts`,
+          count: scripts.length
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to resync scripts',
+          count: 0
+        };
+      }
     })
 });
