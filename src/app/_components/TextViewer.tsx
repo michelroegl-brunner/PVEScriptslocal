@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { api } from '~/trpc/react';
 
 interface TextViewerProps {
   scriptName: string;
@@ -37,18 +36,24 @@ export function TextViewer({ scriptName, isOpen, onClose }: TextViewerProps) {
     
     try {
       const [ctResponse, installResponse] = await Promise.allSettled([
-        api.scripts.getScriptContent.query({ path: `ct/${scriptName}` }),
-        api.scripts.getScriptContent.query({ path: `install/${slug}-install.sh` })
+        fetch(`/api/trpc/scripts.getScriptContent?input=${encodeURIComponent(JSON.stringify({ json: { path: `ct/${scriptName}` } }))}`),
+        fetch(`/api/trpc/scripts.getScriptContent?input=${encodeURIComponent(JSON.stringify({ json: { path: `install/${slug}-install.sh` } }))}`)
       ]);
 
       const content: ScriptContent = {};
 
-      if (ctResponse.status === 'fulfilled' && ctResponse.value.success) {
-        content.ctScript = ctResponse.value.content;
+      if (ctResponse.status === 'fulfilled' && ctResponse.value.ok) {
+        const ctData = await ctResponse.value.json();
+        if (ctData.result?.data?.json?.success) {
+          content.ctScript = ctData.result.data.json.content;
+        }
       }
 
-      if (installResponse.status === 'fulfilled' && installResponse.value.success) {
-        content.installScript = installResponse.value.content;
+      if (installResponse.status === 'fulfilled' && installResponse.value.ok) {
+        const installData = await installResponse.value.json();
+        if (installData.result?.data?.json?.success) {
+          content.installScript = installData.result.data.json.content;
+        }
       }
 
       setScriptContent(content);
