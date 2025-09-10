@@ -17,6 +17,11 @@ export interface ScriptCredentials {
   password: string | null;
 }
 
+export interface ScriptNote {
+  text: string;
+  type: string;
+}
+
 export interface Script {
   name: string;
   slug: string;
@@ -33,7 +38,7 @@ export interface Script {
   description: string;
   install_methods: ScriptInstallMethod[];
   default_credentials: ScriptCredentials;
-  notes: string[];
+  notes: (ScriptNote | string)[];
 }
 
 export interface ScriptCard {

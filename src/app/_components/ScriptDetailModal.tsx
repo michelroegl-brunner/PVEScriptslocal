@@ -218,11 +218,34 @@ export function ScriptDetailModal({ script, isOpen, onClose }: ScriptDetailModal
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-3">Notes</h3>
               <ul className="space-y-2">
-                {script.notes.map((note, index) => (
-                  <li key={index} className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                    {note}
-                  </li>
-                ))}
+                {script.notes.map((note, index) => {
+                  // Handle both object and string note formats
+                  const noteText = typeof note === 'string' ? note : note.text;
+                  const noteType = typeof note === 'string' ? 'info' : note.type;
+                  
+                  return (
+                    <li key={index} className={`text-sm p-3 rounded-lg ${
+                      noteType === 'warning' 
+                        ? 'bg-yellow-50 text-yellow-800 border-l-4 border-yellow-400' 
+                        : noteType === 'error'
+                        ? 'bg-red-50 text-red-800 border-l-4 border-red-400'
+                        : 'bg-gray-50 text-gray-600'
+                    }`}>
+                      <div className="flex items-start">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mr-2 ${
+                          noteType === 'warning' 
+                            ? 'bg-yellow-100 text-yellow-800' 
+                            : noteType === 'error'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {noteType}
+                        </span>
+                        <span>{noteText}</span>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
