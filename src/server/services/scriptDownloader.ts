@@ -46,7 +46,7 @@ export class ScriptDownloaderService {
   private modifyScriptContent(content: string): string {
     // Replace the build.func source line
     const oldPattern = /source <\(curl -fsSL https:\/\/raw\.githubusercontent\.com\/community-scripts\/ProxmoxVE\/main\/misc\/build\.func\)/g;
-    const newPattern = 'this SCRIPT_DIR="$(dirname "$0")" source "$SCRIPT_DIR/../core/build.func"';
+    const newPattern = 'SCRIPT_DIR="$(dirname "$0")" \nsource "$SCRIPT_DIR/../core/build.func"';
     
     return content.replace(oldPattern, newPattern);
   }

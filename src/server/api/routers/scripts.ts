@@ -17,6 +17,16 @@ export const scriptsRouter = createTRPCRouter({
       };
     }),
 
+  // Get CT scripts (for local scripts tab)
+  getCtScripts: publicProcedure
+    .query(async () => {
+      const scripts = await scriptManager.getCtScripts();
+      return {
+        scripts,
+        directoryInfo: scriptManager.getScriptsDirectoryInfo()
+      };
+    }),
+
   // Get repository status
   getRepoStatus: publicProcedure
     .query(async () => {

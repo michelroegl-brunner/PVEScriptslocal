@@ -10,7 +10,7 @@ interface ScriptsListProps {
 }
 
 export function ScriptsList({ onRunScript }: ScriptsListProps) {
-  const { data, isLoading, error, refetch } = api.scripts.getScripts.useQuery();
+  const { data, isLoading, error, refetch } = api.scripts.getCtScripts.useQuery();
   const [selectedScript, setSelectedScript] = useState<string | null>(null);
 
   if (isLoading) {
@@ -110,7 +110,7 @@ export function ScriptsList({ onRunScript }: ScriptsListProps) {
                   View
                 </button>
                 <button
-                  onClick={() => onRunScript(script.path, script.name)}
+                  onClick={() => onRunScript(`scripts/ct/${script.name}`, script.name)}
                   disabled={!script.executable}
                   className={`px-4 py-2 text-sm font-medium rounded transition-colors ${
                     script.executable
@@ -129,7 +129,7 @@ export function ScriptsList({ onRunScript }: ScriptsListProps) {
       {selectedScript && (
         <div className="mt-6">
           <Terminal
-            scriptPath={selectedScript}
+            scriptPath={`scripts/ct/${selectedScript.split('/').pop()}`}
             onClose={() => setSelectedScript(null)}
           />
         </div>

@@ -65,6 +65,46 @@ export class ScriptManager {
   }
 
   /**
+   * Get all available scripts in the ct subdirectory
+   */
+  async getCtScripts(): Promise<ScriptInfo[]> {
+    try {
+      const ctDir = join(this.scriptsDir, 'ct');
+      const files = await readdir(ctDir);
+      const scripts: ScriptInfo[] = [];
+
+      for (const file of files) {
+        const filePath = join(ctDir, file);
+        const stats = await stat(filePath);
+
+        if (stats.isFile()) {
+          const extension = extname(file);
+          
+          // Check if file extension is allowed
+          if (this.allowedExtensions.includes(extension)) {
+            // Check if file is executable
+            const executable = await this.isExecutable(filePath);
+            
+            scripts.push({
+              name: file,
+              path: filePath,
+              extension,
+              size: stats.size,
+              lastModified: stats.mtime,
+              executable
+            });
+          }
+        }
+      }
+
+      return scripts.sort((a, b) => a.name.localeCompare(b.name));
+    } catch (error) {
+      console.error('Error reading ct scripts directory:', error);
+      return [];
+    }
+  }
+
+  /**
    * Check if a file is executable
    */
   private async isExecutable(filePath: string): Promise<boolean> {
