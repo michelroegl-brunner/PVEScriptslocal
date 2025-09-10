@@ -7,24 +7,24 @@ import { ScriptDetailModal } from './ScriptDetailModal';
 import type { ScriptCard as ScriptCardType, Script } from '~/types/script';
 
 export function ScriptsGrid() {
-  const [selectedScript, setSelectedScript] = useState<Script | null>(null);
+  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const { data: scriptCardsData, isLoading, error, refetch } = api.scripts.getScriptCards.useQuery();
   const { data: scriptData } = api.scripts.getScriptBySlug.useQuery(
-    { slug: selectedScript?.slug ?? '' },
-    { enabled: !!selectedScript }
+    { slug: selectedSlug ?? '' },
+    { enabled: !!selectedSlug }
   );
 
   const handleCardClick = (scriptCard: ScriptCardType) => {
-    // We'll fetch the full script data when the modal opens
-    setSelectedScript(scriptCard as any); // Temporary cast, will be replaced with full script data
+    console.log('Card clicked:', scriptCard);
+    setSelectedSlug(scriptCard.slug);
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setSelectedScript(null);
+    setSelectedSlug(null);
   };
 
   if (isLoading) {
@@ -47,6 +47,10 @@ export function ScriptsGrid() {
           <p className="text-sm text-gray-500 mt-1">
             {scriptCardsData?.error || 'Unknown error occurred'}
           </p>
+          <div className="mt-4 text-xs text-gray-400">
+            <p>Make sure to set the REPO_URL environment variable.</p>
+            <p>Example: REPO_URL="https://github.com/username/repo"</p>
+          </div>
         </div>
         <button
           onClick={() => refetch()}
@@ -93,6 +97,16 @@ export function ScriptsGrid() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
       />
+      
+      {/* Debug info */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-4 p-4 bg-gray-100 rounded text-xs">
+          <div>Selected Slug: {selectedSlug}</div>
+          <div>Modal Open: {isModalOpen.toString()}</div>
+          <div>Script Data Success: {scriptData?.success?.toString()}</div>
+          <div>Script Data: {JSON.stringify(scriptData, null, 2)}</div>
+        </div>
+      )}
     </>
   );
 }

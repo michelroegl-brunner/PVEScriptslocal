@@ -66,6 +66,7 @@ export const scriptsRouter = createTRPCRouter({
         const cards = await githubService.getScriptCards();
         return { success: true, cards };
       } catch (error) {
+        console.error('Error in getScriptCards:', error);
         return {
           success: false,
           error: error instanceof Error ? error.message : 'Failed to fetch script cards',

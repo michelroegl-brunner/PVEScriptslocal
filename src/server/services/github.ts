@@ -12,10 +12,14 @@ export class GitHubService {
     this.branch = env.REPO_BRANCH;
     this.jsonFolder = env.JSON_FOLDER;
     
+    if (!this.repoUrl) {
+      throw new Error("REPO_URL environment variable is not set. Please set it to a valid GitHub repository URL.");
+    }
+    
     // Extract owner and repo from the URL
     const urlMatch = this.repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
     if (!urlMatch) {
-      throw new Error("Invalid GitHub repository URL");
+      throw new Error(`Invalid GitHub repository URL: ${this.repoUrl}`);
     }
     
     const [, owner, repo] = urlMatch;
