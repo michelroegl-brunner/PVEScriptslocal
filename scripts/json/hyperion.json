@@ -1,23 +1,23 @@
 {
-  "name": "Debian",
-  "slug": "debian",
+  "name": "Hyperion",
+  "slug": "hyperion",
   "categories": [
-    2
+    13
   ],
   "date_created": "2024-05-02",
   "type": "ct",
   "updateable": true,
   "privileged": false,
-  "interface_port": null,
-  "documentation": null,
-  "website": "https://www.debian.org/",
-  "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons/webp/debian.webp",
+  "interface_port": 8090,
+  "documentation": "https://docs.hyperion-project.org/",
+  "website": "https://hyperion-project.org/forum/",
+  "logo": "https://cdn.jsdelivr.net/gh/selfhst/icons/webp/hyperion.webp",
   "config_path": "",
-  "description": "Debian Linux is a distribution that emphasizes free software. It supports many hardware platforms.",
+  "description": "Hyperion is an opensource Ambient Lighting implementation. It supports many LED devices and video grabbers.",
   "install_methods": [
     {
       "type": "default",
-      "script": "ct/debian.sh",
+      "script": "ct/hyperion.sh",
       "resources": {
         "cpu": 1,
         "ram": 512,
