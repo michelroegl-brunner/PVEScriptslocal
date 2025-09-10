@@ -2,6 +2,7 @@ import { readdir, stat, access } from 'fs/promises';
 import { join, resolve, extname } from 'path';
 import { env } from '~/env.js';
 import { spawn, ChildProcess } from 'child_process';
+import { localScriptsService } from '~/server/services/localScripts';
 
 export interface ScriptInfo {
   name: string;
@@ -10,6 +11,8 @@ export interface ScriptInfo {
   size: number;
   lastModified: Date;
   executable: boolean;
+  logo?: string;
+  slug?: string;
 }
 
 export class ScriptManager {
@@ -85,13 +88,28 @@ export class ScriptManager {
             // Check if file is executable
             const executable = await this.isExecutable(filePath);
             
+            // Extract slug from filename (remove .sh extension)
+            const slug = file.replace(/\.sh$/, '');
+            
+            // Try to get logo from JSON data
+            let logo: string | undefined;
+            try {
+              const scriptData = await localScriptsService.getScriptBySlug(slug);
+              logo = scriptData?.logo || undefined;
+            } catch (error) {
+              // JSON file might not exist, that's okay
+              console.log(`No JSON data found for ${slug}:`, error);
+            }
+            
             scripts.push({
               name: file,
               path: filePath,
               extension,
               size: stats.size,
               lastModified: stats.mtime,
-              executable
+              executable,
+              logo,
+              slug
             });
           }
         }

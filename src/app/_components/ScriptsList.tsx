@@ -88,16 +88,30 @@ export function ScriptsList({ onRunScript }: ScriptsListProps) {
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <span className="text-2xl">{getFileIcon(script.extension)}</span>
+                {script.logo ? (
+                  <img 
+                    src={script.logo} 
+                    alt={`${script.name} logo`}
+                    className="w-8 h-8 rounded object-contain"
+                    onError={(e) => {
+                      // Fallback to file icon if logo fails to load
+                      e.currentTarget.style.display = 'none';
+                      const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
+                      if (nextElement) {
+                        nextElement.style.display = 'block';
+                      }
+                    }}
+                  />
+                ) : null}
+                <span className="text-2xl" style={{ display: script.logo ? 'none' : 'block' }}>
+                  {getFileIcon(script.extension)}
+                </span>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-800">{script.name}</h3>
                   <div className="text-sm text-gray-500 space-y-1">
                     <p>Size: {formatFileSize(script.size)}</p>
                     <p>Modified: {formatDate(script.lastModified)}</p>
                     <p>Extension: {script.extension}</p>
-                    <p className={`font-medium ${script.executable ? 'text-green-600' : 'text-red-600'}`}>
-                      {script.executable ? '✅ Executable' : '❌ Not executable'}
-                    </p>
                   </div>
                 </div>
               </div>
@@ -111,14 +125,9 @@ export function ScriptsList({ onRunScript }: ScriptsListProps) {
                 </button>
                 <button
                   onClick={() => onRunScript(`scripts/ct/${script.name}`, script.name)}
-                  disabled={!script.executable}
-                  className={`px-4 py-2 text-sm font-medium rounded transition-colors ${
-                    script.executable
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
+                  className="px-4 py-2 text-sm font-medium rounded transition-colors bg-green-600 text-white hover:bg-green-700"
                 >
-                  {script.executable ? '▶️ Run' : '🚫 Cannot Run'}
+                  ▶️ Run
                 </button>
               </div>
             </div>

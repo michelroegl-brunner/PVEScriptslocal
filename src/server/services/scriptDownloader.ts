@@ -49,6 +49,7 @@ export class ScriptDownloaderService {
     const newPattern = 'SCRIPT_DIR="$(dirname "$0")" \nsource "$SCRIPT_DIR/../core/build.func"';
     
     return content.replace(oldPattern, newPattern);
+    
   }
 
   async loadScript(script: Script): Promise<{ success: boolean; message: string; files: string[] }> {
