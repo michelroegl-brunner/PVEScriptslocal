@@ -33,11 +33,6 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Repository Status */}
-        <div className="mb-8">
-          <RepoStatus />
-        </div>
-
         {/* Script Source Tabs */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">

@@ -41,18 +41,28 @@ export const scriptsRouter = createTRPCRouter({
       return result;
     }),
 
-  // Get script content
+  // Get script content for viewing
   getScriptContent: publicProcedure
-    .input(z.object({ scriptPath: z.string() }))
+    .input(z.object({ path: z.string() }))
     .query(async ({ input }) => {
       try {
-        const content = await scriptManager.getScriptContent(input.scriptPath);
+        const { readFile } = await import('fs/promises');
+        const { join } = await import('path');
+        const { env } = await import('~/env');
+        
+        const scriptsDir = join(process.cwd(), env.SCRIPTS_DIRECTORY);
+        const fullPath = join(scriptsDir, input.path);
+        
+        // Security check: ensure the path is within the scripts directory
+        if (!fullPath.startsWith(scriptsDir)) {
+          throw new Error('Invalid script path');
+        }
+        
+        const content = await readFile(fullPath, 'utf-8');
         return { success: true, content };
       } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
+        console.error('Error reading script content:', error);
+        return { success: false, error: 'Failed to read script content' };
       }
     }),
 

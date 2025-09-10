@@ -3,6 +3,7 @@
 import { api } from '~/trpc/react';
 import { useState } from 'react';
 import { Terminal } from './Terminal';
+import { TextViewer } from './TextViewer';
 
 
 interface ScriptsListProps {
@@ -12,6 +13,8 @@ interface ScriptsListProps {
 export function ScriptsList({ onRunScript }: ScriptsListProps) {
   const { data, isLoading, error, refetch } = api.scripts.getCtScripts.useQuery();
   const [selectedScript, setSelectedScript] = useState<string | null>(null);
+  const [viewerScript, setViewerScript] = useState<string | null>(null);
+  const [isViewerOpen, setIsViewerOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -118,7 +121,10 @@ export function ScriptsList({ onRunScript }: ScriptsListProps) {
               
               <div className="flex space-x-2">
                 <button
-                  onClick={() => setSelectedScript(script.path)}
+                  onClick={() => {
+                    setViewerScript(script.name);
+                    setIsViewerOpen(true);
+                  }}
                   className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                 >
                   View
@@ -143,6 +149,15 @@ export function ScriptsList({ onRunScript }: ScriptsListProps) {
           />
         </div>
       )}
+
+      <TextViewer
+        scriptName={viewerScript || ''}
+        isOpen={isViewerOpen}
+        onClose={() => {
+          setIsViewerOpen(false);
+          setViewerScript(null);
+        }}
+      />
     </div>
   );
 }
