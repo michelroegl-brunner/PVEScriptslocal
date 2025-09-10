@@ -136,7 +136,7 @@ class ScriptExecutionHandler {
       }
 
       // Start script execution with pty for proper TTY support
-      const childProcess = ptySpawn('bash', [scriptPath], {
+      const childProcess = ptySpawn('bash', [resolvedPath], {
         cwd: scriptsDir,
         name: 'xterm-256color',
         cols: 80,
