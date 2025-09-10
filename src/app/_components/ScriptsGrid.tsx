@@ -17,7 +17,6 @@ export function ScriptsGrid() {
   );
 
   const handleCardClick = (scriptCard: ScriptCardType) => {
-    console.log('Card clicked:', scriptCard);
     setSelectedSlug(scriptCard.slug);
     setIsModalOpen(true);
   };
@@ -97,16 +96,6 @@ export function ScriptsGrid() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
       />
-      
-      {/* Debug info */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="mt-4 p-4 bg-gray-100 rounded text-xs">
-          <div>Selected Slug: {selectedSlug}</div>
-          <div>Modal Open: {isModalOpen.toString()}</div>
-          <div>Script Data Success: {scriptData?.success?.toString()}</div>
-          <div>Script Data: {JSON.stringify(scriptData, null, 2)}</div>
-        </div>
-      )}
     </>
   );
 }
