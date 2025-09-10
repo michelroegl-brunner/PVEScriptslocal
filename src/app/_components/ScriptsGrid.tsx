@@ -6,7 +6,11 @@ import { ScriptCard } from './ScriptCard';
 import { ScriptDetailModal } from './ScriptDetailModal';
 import type { ScriptCard as ScriptCardType, Script } from '~/types/script';
 
-export function ScriptsGrid() {
+interface ScriptsGridProps {
+  onInstallScript?: (scriptPath: string, scriptName: string) => void;
+}
+
+export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -111,6 +115,7 @@ export function ScriptsGrid() {
         script={scriptData?.success ? scriptData.script : null}
         isOpen={isModalOpen}
         onClose={handleCloseModal}
+        onInstallScript={onInstallScript}
       />
     </>
   );

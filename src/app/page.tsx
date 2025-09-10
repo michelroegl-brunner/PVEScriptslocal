@@ -79,7 +79,7 @@ export default function Home() {
 
         {/* Scripts List */}
         {activeTab === 'github' ? (
-          <ScriptsGrid />
+          <ScriptsGrid onInstallScript={handleRunScript} />
         ) : (
           <ScriptsList onRunScript={handleRunScript} />
         )}
