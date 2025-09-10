@@ -61,9 +61,9 @@ export function ScriptsGrid() {
     );
   }
 
-  const scripts = scriptCardsData.cards || [];
+  const scripts = scriptCardsData?.cards || [];
 
-  if (scripts.length === 0) {
+  if (!scripts || scripts.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="text-gray-500">
@@ -82,13 +82,21 @@ export function ScriptsGrid() {
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {scripts.map((script) => (
-          <ScriptCard
-            key={script.slug}
-            script={script}
-            onClick={handleCardClick}
-          />
-        ))}
+        {scripts.map((script, index) => {
+          // Add validation to ensure script has required properties
+          if (!script || typeof script !== 'object') {
+            console.warn('Invalid script object at index', index, script);
+            return null;
+          }
+          
+          return (
+            <ScriptCard
+              key={script.slug || `script-${index}`}
+              script={script}
+              onClick={handleCardClick}
+            />
+          );
+        })}
       </div>
 
       <ScriptDetailModal

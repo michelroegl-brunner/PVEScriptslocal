@@ -34,14 +34,14 @@ export function ScriptCard({ script, onClick }: ScriptCardProps) {
             ) : (
               <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
                 <span className="text-gray-500 text-lg font-semibold">
-                  {script.name.charAt(0).toUpperCase()}
+                  {script.name?.charAt(0)?.toUpperCase() || '?'}
                 </span>
               </div>
             )}
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold text-gray-900 truncate">
-              {script.name}
+              {script.name || 'Unnamed Script'}
             </h3>
             <div className="flex items-center space-x-2 mt-1">
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -49,7 +49,7 @@ export function ScriptCard({ script, onClick }: ScriptCardProps) {
                   ? 'bg-blue-100 text-blue-800' 
                   : 'bg-gray-100 text-gray-800'
               }`}>
-                {script.type.toUpperCase()}
+                {script.type?.toUpperCase() || 'UNKNOWN'}
               </span>
               {script.updateable && (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -62,7 +62,7 @@ export function ScriptCard({ script, onClick }: ScriptCardProps) {
 
         {/* Description */}
         <p className="text-gray-600 text-sm line-clamp-3 mb-4">
-          {script.description}
+          {script.description || 'No description available'}
         </p>
 
         {/* Footer with website link */}
