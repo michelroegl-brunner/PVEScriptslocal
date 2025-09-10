@@ -4,6 +4,7 @@ import { scriptManager } from "~/server/lib/scripts";
 import { gitManager } from "~/server/lib/git";
 import { githubService } from "~/server/services/github";
 import { localScriptsService } from "~/server/services/localScripts";
+import { scriptDownloaderService } from "~/server/services/scriptDownloader";
 
 export const scriptsRouter = createTRPCRouter({
   // Get all available scripts
@@ -135,6 +136,67 @@ export const scriptsRouter = createTRPCRouter({
           success: false,
           error: error instanceof Error ? error.message : 'Failed to resync scripts. Make sure REPO_URL is set.',
           count: 0
+        };
+      }
+    }),
+
+  // Load script files from GitHub
+  loadScript: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .mutation(async ({ input }) => {
+      try {
+        // Get the script details
+        const script = await localScriptsService.getScriptBySlug(input.slug);
+        if (!script) {
+          return {
+            success: false,
+            error: 'Script not found',
+            files: []
+          };
+        }
+
+        // Load the script files
+        const result = await scriptDownloaderService.loadScript(script);
+        return result;
+      } catch (error) {
+        console.error('Error in loadScript:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to load script',
+          files: []
+        };
+      }
+    }),
+
+  // Check if script files exist locally
+  checkScriptFiles: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const script = await localScriptsService.getScriptBySlug(input.slug);
+        if (!script) {
+          return {
+            success: false,
+            error: 'Script not found',
+            ctExists: false,
+            installExists: false,
+            files: []
+          };
+        }
+
+        const result = await scriptDownloaderService.checkScriptExists(script);
+        return {
+          success: true,
+          ...result
+        };
+      } catch (error) {
+        console.error('Error in checkScriptFiles:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to check script files',
+          ctExists: false,
+          installExists: false,
+          files: []
         };
       }
     })

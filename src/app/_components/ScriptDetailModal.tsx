@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { api } from '~/trpc/react';
 import type { Script } from '~/types/script';
 
 interface ScriptDetailModalProps {
@@ -11,6 +12,33 @@ interface ScriptDetailModalProps {
 
 export function ScriptDetailModal({ script, isOpen, onClose }: ScriptDetailModalProps) {
   const [imageError, setImageError] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadMessage, setLoadMessage] = useState<string | null>(null);
+
+  // Check if script files exist locally
+  const { data: scriptFilesData } = api.scripts.checkScriptFiles.useQuery(
+    { slug: script?.slug ?? '' },
+    { enabled: !!script && isOpen }
+  );
+
+  // Load script mutation
+  const loadScriptMutation = api.scripts.loadScript.useMutation({
+    onSuccess: (data) => {
+      setIsLoading(false);
+      if (data.success) {
+        setLoadMessage(`✅ ${data.message}`);
+      } else {
+        setLoadMessage(`❌ ${data.error}`);
+      }
+      // Clear message after 5 seconds
+      setTimeout(() => setLoadMessage(null), 5000);
+    },
+    onError: (error) => {
+      setIsLoading(false);
+      setLoadMessage(`❌ Error: ${error.message}`);
+      setTimeout(() => setLoadMessage(null), 5000);
+    },
+  });
 
   if (!isOpen || !script) return null;
 
@@ -22,6 +50,14 @@ export function ScriptDetailModal({ script, isOpen, onClose }: ScriptDetailModal
     if (e.target === e.currentTarget) {
       onClose();
     }
+  };
+
+  const handleLoadScript = async () => {
+    if (!script) return;
+    
+    setIsLoading(true);
+    setLoadMessage(null);
+    loadScriptMutation.mutate({ slug: script.slug });
   };
 
   return (
@@ -70,15 +106,69 @@ export function ScriptDetailModal({ script, isOpen, onClose }: ScriptDetailModal
               </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex items-center space-x-4">
+            {/* Load Script Button */}
+            <button
+              onClick={handleLoadScript}
+              disabled={isLoading}
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                isLoading
+                  ? 'bg-gray-400 text-white cursor-not-allowed'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              }`}
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Loading...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Load Script</span>
+                </>
+              )}
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
+
+        {/* Load Message */}
+        {loadMessage && (
+          <div className="mx-6 mb-4 p-3 rounded-lg bg-blue-50 text-blue-800 text-sm">
+            {loadMessage}
+          </div>
+        )}
+
+        {/* Script Files Status */}
+        {scriptFilesData?.success && (
+          <div className="mx-6 mb-4 p-3 rounded-lg bg-gray-50 text-sm">
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <div className={`w-2 h-2 rounded-full ${scriptFilesData.ctExists ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                <span>CT Script: {scriptFilesData.ctExists ? 'Available' : 'Not loaded'}</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className={`w-2 h-2 rounded-full ${scriptFilesData.installExists ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                <span>Install Script: {scriptFilesData.installExists ? 'Available' : 'Not loaded'}</span>
+              </div>
+            </div>
+            {scriptFilesData.files.length > 0 && (
+              <div className="mt-2 text-xs text-gray-600">
+                Files: {scriptFilesData.files.join(', ')}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Content */}
         <div className="p-6 space-y-6">
