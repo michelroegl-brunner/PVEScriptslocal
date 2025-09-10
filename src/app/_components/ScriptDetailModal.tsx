@@ -16,7 +16,7 @@ export function ScriptDetailModal({ script, isOpen, onClose }: ScriptDetailModal
   const [loadMessage, setLoadMessage] = useState<string | null>(null);
 
   // Check if script files exist locally
-  const { data: scriptFilesData } = api.scripts.checkScriptFiles.useQuery(
+  const { data: scriptFilesData, refetch: refetchScriptFiles } = api.scripts.checkScriptFiles.useQuery(
     { slug: script?.slug ?? '' },
     { enabled: !!script && isOpen }
   );
@@ -27,6 +27,8 @@ export function ScriptDetailModal({ script, isOpen, onClose }: ScriptDetailModal
       setIsLoading(false);
       if (data.success) {
         setLoadMessage(`✅ ${data.message}`);
+        // Refetch script files status to update the UI
+        refetchScriptFiles();
       } else {
         setLoadMessage(`❌ ${data.error}`);
       }
