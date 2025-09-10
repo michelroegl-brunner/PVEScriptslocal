@@ -2,12 +2,25 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { scriptManager } from "~/server/lib/scripts";
 import { gitManager } from "~/server/lib/git";
+import { githubService } from "~/server/services/github";
+import { localScriptsService } from "~/server/services/localScripts";
+import { scriptDownloaderService } from "~/server/services/scriptDownloader";
 
 export const scriptsRouter = createTRPCRouter({
   // Get all available scripts
   getScripts: publicProcedure
     .query(async () => {
       const scripts = await scriptManager.getScripts();
+      return {
+        scripts,
+        directoryInfo: scriptManager.getScriptsDirectoryInfo()
+      };
+    }),
+
+  // Get CT scripts (for local scripts tab)
+  getCtScripts: publicProcedure
+    .query(async () => {
+      const scripts = await scriptManager.getCtScripts();
       return {
         scripts,
         directoryInfo: scriptManager.getScriptsDirectoryInfo()
@@ -28,18 +41,28 @@ export const scriptsRouter = createTRPCRouter({
       return result;
     }),
 
-  // Get script content
+  // Get script content for viewing
   getScriptContent: publicProcedure
-    .input(z.object({ scriptPath: z.string() }))
+    .input(z.object({ path: z.string() }))
     .query(async ({ input }) => {
       try {
-        const content = await scriptManager.getScriptContent(input.scriptPath);
+        const { readFile } = await import('fs/promises');
+        const { join } = await import('path');
+        const { env } = await import('~/env');
+        
+        const scriptsDir = join(process.cwd(), env.SCRIPTS_DIRECTORY);
+        const fullPath = join(scriptsDir, input.path);
+        
+        // Security check: ensure the path is within the scripts directory
+        if (!fullPath.startsWith(scriptsDir)) {
+          throw new Error('Invalid script path');
+        }
+        
+        const content = await readFile(fullPath, 'utf-8');
         return { success: true, content };
       } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        };
+        console.error('Error reading script content:', error);
+        return { success: false, error: 'Failed to read script content' };
       }
     }),
 
@@ -55,5 +78,206 @@ export const scriptsRouter = createTRPCRouter({
   getDirectoryInfo: publicProcedure
     .query(async () => {
       return scriptManager.getScriptsDirectoryInfo();
+    }),
+
+  // Local script routes (using scripts/json directory)
+  // Get all script cards from local directory
+  getScriptCards: publicProcedure
+    .query(async () => {
+      try {
+        const cards = await localScriptsService.getScriptCards();
+        return { success: true, cards };
+      } catch (error) {
+        console.error('Error in getScriptCards:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch script cards',
+          cards: []
+        };
+      }
+    }),
+
+  // Get all scripts from local directory
+  getAllScripts: publicProcedure
+    .query(async () => {
+      try {
+        const scripts = await localScriptsService.getAllScripts();
+        return { success: true, scripts };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch scripts',
+          scripts: []
+        };
+      }
+    }),
+
+  // Get script by slug from local directory
+  getScriptBySlug: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const script = await localScriptsService.getScriptBySlug(input.slug);
+        if (!script) {
+          return {
+            success: false,
+            error: 'Script not found',
+            script: null
+          };
+        }
+        return { success: true, script };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to fetch script',
+          script: null
+        };
+      }
+    }),
+
+  // Resync scripts from GitHub repo to local directory
+  resyncScripts: publicProcedure
+    .mutation(async () => {
+      try {
+        // First, try to get scripts from GitHub
+        const githubScripts = await githubService.getAllScripts();
+        
+        // Save scripts to local directory
+        await localScriptsService.saveScriptsFromGitHub(githubScripts);
+        
+        return { 
+          success: true, 
+          message: `Successfully synced ${githubScripts.length} scripts from GitHub to local directory`,
+          count: githubScripts.length
+        };
+      } catch (error) {
+        console.error('Error in resyncScripts:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to resync scripts. Make sure REPO_URL is set.',
+          count: 0
+        };
+      }
+    }),
+
+  // Load script files from GitHub
+  loadScript: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .mutation(async ({ input }) => {
+      try {
+        // Get the script details
+        const script = await localScriptsService.getScriptBySlug(input.slug);
+        if (!script) {
+          return {
+            success: false,
+            error: 'Script not found',
+            files: []
+          };
+        }
+
+        // Load the script files
+        const result = await scriptDownloaderService.loadScript(script);
+        return result;
+      } catch (error) {
+        console.error('Error in loadScript:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to load script',
+          files: []
+        };
+      }
+    }),
+
+  // Check if script files exist locally
+  checkScriptFiles: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const script = await localScriptsService.getScriptBySlug(input.slug);
+        if (!script) {
+          return {
+            success: false,
+            error: 'Script not found',
+            ctExists: false,
+            installExists: false,
+            files: []
+          };
+        }
+
+        const result = await scriptDownloaderService.checkScriptExists(script);
+        return {
+          success: true,
+          ...result
+        };
+      } catch (error) {
+        console.error('Error in checkScriptFiles:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to check script files',
+          ctExists: false,
+          installExists: false,
+          files: []
+        };
+      }
+    }),
+
+  // Compare local and remote script content
+  compareScriptContent: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const script = await localScriptsService.getScriptBySlug(input.slug);
+        if (!script) {
+          return {
+            success: false,
+            error: 'Script not found',
+            hasDifferences: false,
+            differences: []
+          };
+        }
+
+        const result = await scriptDownloaderService.compareScriptContent(script);
+        return {
+          success: true,
+          ...result
+        };
+      } catch (error) {
+        console.error('Error in compareScriptContent:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to compare script content',
+          hasDifferences: false,
+          differences: []
+        };
+      }
+    }),
+
+  // Get diff content for a specific script file
+  getScriptDiff: publicProcedure
+    .input(z.object({ slug: z.string(), filePath: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const script = await localScriptsService.getScriptBySlug(input.slug);
+        if (!script) {
+          return {
+            success: false,
+            error: 'Script not found',
+            diff: null
+          };
+        }
+
+        const result = await scriptDownloaderService.getScriptDiff(script, input.filePath);
+        return {
+          success: true,
+          ...result
+        };
+      } catch (error) {
+        console.error('Error in getScriptDiff:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get script diff',
+          diff: null
+        };
+      }
     })
 });

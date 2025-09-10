@@ -66,15 +66,12 @@ class ScriptExecutionHandler {
 
   async handleMessage(ws, message) {
     const { action, scriptPath, executionId, input } = message;
-    console.log('Handling message:', { action, scriptPath, executionId });
 
     switch (action) {
       case 'start':
         if (scriptPath && executionId) {
-          console.log('Starting script execution for:', scriptPath);
           await this.startScriptExecution(ws, scriptPath, executionId);
         } else {
-          console.log('Missing scriptPath or executionId');
           this.sendMessage(ws, {
             type: 'error',
             data: 'Missing scriptPath or executionId',
@@ -136,7 +133,7 @@ class ScriptExecutionHandler {
       }
 
       // Start script execution with pty for proper TTY support
-      const childProcess = ptySpawn('bash', [scriptPath], {
+      const childProcess = ptySpawn('bash', [resolvedPath], {
         cwd: scriptsDir,
         name: 'xterm-256color',
         cols: 80,

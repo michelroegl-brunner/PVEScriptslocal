@@ -2,8 +2,8 @@
 'use client';
 
 import { useState } from 'react';
-import { ScriptsList } from './_components/ScriptsList';
-import { RepoStatus } from './_components/RepoStatus';
+import { ScriptsGrid } from './_components/ScriptsGrid';
+import { ResyncButton } from './_components/ResyncButton';
 import { Terminal } from './_components/Terminal';
 
 export default function Home() {
@@ -23,16 +23,19 @@ export default function Home() {
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">
-            🚀 PVE Scripts Local Management
+            🚀 PVE Scripts Management
           </h1>
           <p className="text-gray-600">
             Manage and execute Proxmox helper scripts locally with live output streaming
           </p>
         </div>
 
-        {/* Repository Status */}
+        {/* Resync Button */}
         <div className="mb-8">
-          <RepoStatus />
+          <div className="flex items-center justify-between mb-6">
+            <div></div>
+            <ResyncButton />
+          </div>
         </div>
 
         {/* Running Script Terminal */}
@@ -46,7 +49,7 @@ export default function Home() {
         )}
 
         {/* Scripts List */}
-        <ScriptsList onRunScript={handleRunScript} />
+        <ScriptsGrid onInstallScript={handleRunScript} />
       </div>
     </main>
   );

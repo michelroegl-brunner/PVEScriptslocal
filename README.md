@@ -1,12 +1,249 @@
-# How to run this Alpha Software
+# PVE Scripts Local 🚀
 
-You need npm and git installed on your PVE host
+A modern web-based management interface for Proxmox VE (PVE) helper scripts. This tool provides a user-friendly way to discover, download, and execute community-sourced Proxmox scripts locally with real-time terminal output streaming.
 
-```git clone git@github.com:michelroegl-brunner/PVESciptslocal.git```
+## 🌟 Features
 
-Then you need to run ```npm install```
+- **Web-based Interface**: Modern React/Next.js frontend with real-time terminal emulation
+- **Script Discovery**: Browse and search through community Proxmox scripts from GitHub
+- **One-Click Execution**: Run scripts directly from the web interface with live output
+- **Real-time Terminal**: Full terminal emulation with xterm.js for interactive script execution
+- **Script Management**: Download, update, and manage local script collections
+- **Security**: Sandboxed script execution with path validation and time limits
+- **Database Integration**: PostgreSQL backend for script metadata and execution history
+- **WebSocket Communication**: Real-time bidirectional communication for script execution
 
-And to run the dev server on IP:3000
+## 🏗️ Architecture
 
-```npm run dev```
+### Frontend
+- **Next.js 15** with React 19
+- **TypeScript** for type safety
+- **Tailwind CSS** for styling
+- **xterm.js** for terminal emulation
+- **tRPC** for type-safe API communication
 
+### Backend
+- **Node.js** server with WebSocket support
+- **PostgreSQL** database with Prisma ORM
+- **WebSocket Server** for real-time script execution
+- **Script Downloader Service** for GitHub integration
+
+### Scripts
+- **Core Functions**: Shared utilities and build functions
+- **Container Scripts**: Pre-configured LXC container setups
+- **Installation Scripts**: System setup and configuration tools
+
+## 📋 Prerequisites
+
+- **Node.js** 18+ and npm
+- **PostgreSQL** database (or Docker/Podman for local development)
+- **Git** for cloning the repository
+- **Linux/Unix environment** (tested on Proxmox VE hosts)
+
+## 🚀 Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/michelroegl-brunner/PVESciptslocal.git
+cd PVESciptslocal
+```
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+### 3. Environment Configuration
+
+Copy the example environment file and configure your settings:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your configuration:
+
+```env
+# Database Configuration
+DATABASE_URL="postgresql://postgres:password@localhost:5432/pve-scripts-local"
+
+# GitHub Repository Configuration
+REPO_URL="https://github.com/community-scripts/ProxmoxVE"
+REPO_BRANCH="main"
+SCRIPTS_DIRECTORY="scripts/ct"
+
+# Security Settings
+MAX_SCRIPT_EXECUTION_TIME="300000"
+ALLOWED_SCRIPT_PATHS="scripts/"
+
+# WebSocket Configuration
+WEBSOCKET_PORT="3000"
+```
+
+
+### 4. Start the Application
+
+
+
+#### Production Mode
+```bash
+npm run build
+npm start
+```
+
+The application will be available at `http://IP:3000`
+
+## 🎯 Usage
+
+### 1. Access the Web Interface
+
+Open your browser and navigate to `http://IP:3000` (or your configured host/port).
+
+### 2. Browse Available Scripts
+
+- The main page displays a grid of available Proxmox scripts
+- Use the search functionality to find specific scripts
+- Scripts are categorized by type (containers, installations, etc.)
+
+### 3. Download Scripts
+
+- Click on any script card to view details
+- Use the "Download" button to fetch scripts from GitHub
+- Downloaded scripts are stored locally in the `scripts/` directory
+
+### 4. Execute Scripts
+
+- Click "Run Script" on any downloaded script
+- A terminal window will open with real-time output
+- Interact with the script through the web terminal
+- Use the close button to stop execution
+
+### 5. Script Management
+
+- View script execution history
+- Update scripts to latest versions
+- Manage local script collections
+
+## 📁 Project Structure
+
+```
+PVESciptslocal/
+├── scripts/                    # Script collection
+│   ├── core/                  # Core utility functions
+│   │   ├── build.func        # Build system functions
+│   │   ├── tools.func        # Tool installation functions
+│   │   └── create_lxc.sh     # LXC container creation
+│   ├── ct/                   # Container templates
+│   │   ├── 2fauth.sh         # 2FA authentication app
+│   │   ├── adguard.sh        # AdGuard Home
+│   │   └── debian.sh         # Debian base container
+│   └── install/              # Installation scripts
+├── src/                      # Source code
+│   ├── app/                  # Next.js app directory
+│   │   ├── _components/      # React components
+│   │   └── page.tsx          # Main page
+│   └── server/               # Server-side code
+│       └── services/         # Business logic services
+├── prisma/                   # Database schema
+├── public/                   # Static assets
+├── server.js                 # Main server file
+└── package.json              # Dependencies and scripts
+```
+
+
+## 🔧 Configuration
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | Required |
+| `REPO_URL` | GitHub repository URL | Required |
+| `REPO_BRANCH` | Git branch to use | `main` |
+| `SCRIPTS_DIRECTORY` | Local scripts directory | `scripts/ct` |
+| `MAX_SCRIPT_EXECUTION_TIME` | Max execution time (ms) | `300000` |
+| `ALLOWED_SCRIPT_PATHS` | Allowed script paths | `scripts/` |
+
+### Database Configuration
+
+The application uses PostgreSQL with Prisma ORM. The database stores:
+- Script metadata and descriptions
+- Execution history and logs
+- User preferences and settings
+
+## 🚀 Development
+
+### Prerequisites for Development
+- Node.js 18+
+- PostgreSQL or Docker
+- Git
+
+### Development Commands
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Start Next.js in development mode
+npm run dev:next
+
+# Type checking
+npm run typecheck
+
+# Linting
+npm run lint
+npm run lint:fix
+
+# Formatting
+npm run format:write
+npm run format:check
+
+# Database operations
+npm run db:generate    # Generate Prisma client
+npm run db:migrate     # Run migrations
+npm run db:push        # Push schema changes
+npm run db:studio      # Open Prisma Studio
+```
+
+### Project Structure for Developers
+
+- **Frontend**: React components in `src/app/_components/`
+- **Backend**: Server logic in `src/server/`
+- **API**: tRPC routers for type-safe API communication
+- **Database**: Prisma schema in `prisma/schema.prisma`
+- **Scripts**: Bash scripts in `scripts/` directory
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+### Adding New Scripts
+
+1. Create a new `.sh` file in the appropriate directory (`scripts/ct/` for containers)
+2. Follow the existing script structure and include proper headers
+3. Test the script thoroughly
+4. Submit a pull request with the new script
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Logs
+
+- Server logs: Check console output or `server.log`
+- Database logs: Check PostgreSQL logs
+- Script execution: View in web terminal
+
+
+---
+
+**Note**: This is alpha software. Use with caution in production environments and always backup your Proxmox configuration before running scripts.

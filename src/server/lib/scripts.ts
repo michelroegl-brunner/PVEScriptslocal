@@ -1,7 +1,8 @@
-import { readdir, stat, access } from 'fs/promises';
+import { readdir, stat } from 'fs/promises';
 import { join, resolve, extname } from 'path';
 import { env } from '~/env.js';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
+import { localScriptsService } from '~/server/services/localScripts';
 
 export interface ScriptInfo {
   name: string;
@@ -10,6 +11,8 @@ export interface ScriptInfo {
   size: number;
   lastModified: Date;
   executable: boolean;
+  logo?: string;
+  slug?: string;
 }
 
 export class ScriptManager {
@@ -60,6 +63,60 @@ export class ScriptManager {
       return scripts.sort((a, b) => a.name.localeCompare(b.name));
     } catch (error) {
       console.error('Error reading scripts directory:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get all available scripts in the ct subdirectory
+   */
+  async getCtScripts(): Promise<ScriptInfo[]> {
+    try {
+      const ctDir = join(this.scriptsDir, 'ct');
+      const files = await readdir(ctDir);
+      const scripts: ScriptInfo[] = [];
+
+      for (const file of files) {
+        const filePath = join(ctDir, file);
+        const stats = await stat(filePath);
+
+        if (stats.isFile()) {
+          const extension = extname(file);
+          
+          // Check if file extension is allowed
+          if (this.allowedExtensions.includes(extension)) {
+            // Check if file is executable
+            const executable = await this.isExecutable(filePath);
+            
+            // Extract slug from filename (remove .sh extension)
+            const slug = file.replace(/\.sh$/, '');
+            
+            // Try to get logo from JSON data
+            let logo: string | undefined;
+            try {
+              const scriptData = await localScriptsService.getScriptBySlug(slug);
+              logo = scriptData?.logo || undefined;
+            } catch (error) {
+              // JSON file might not exist, that's okay
+            }
+            
+            scripts.push({
+              name: file,
+              path: filePath,
+              extension,
+              size: stats.size,
+              lastModified: stats.mtime,
+              executable,
+              logo,
+              slug
+            });
+          }
+        }
+      }
+
+      return scripts.sort((a, b) => a.name.localeCompare(b.name));
+    } catch (error) {
+      console.error('Error reading ct scripts directory:', error);
       return [];
     }
   }
@@ -168,7 +225,6 @@ export class ScriptManager {
     const timeout = setTimeout(() => {
       if (!childProcess.killed) {
         childProcess.kill('SIGTERM');
-        console.log(`Script execution timed out after ${this.maxExecutionTime}ms`);
       }
     }, this.maxExecutionTime);
 

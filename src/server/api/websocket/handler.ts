@@ -1,7 +1,6 @@
-import { WebSocketServer, WebSocket } from 'ws';
-import { IncomingMessage } from 'http';
+import { WebSocketServer, type WebSocket } from 'ws';
+import type { IncomingMessage } from 'http';
 import { scriptManager } from '~/server/lib/scripts';
-import { env } from '~/env.js';
 
 interface ScriptExecutionMessage {
   type: 'start' | 'output' | 'error' | 'end';
@@ -22,8 +21,7 @@ export class ScriptExecutionHandler {
     this.wss.on('connection', this.handleConnection.bind(this));
   }
 
-  private handleConnection(ws: WebSocket, request: IncomingMessage) {
-    console.log('New WebSocket connection for script execution');
+  private handleConnection(ws: WebSocket, _request: IncomingMessage) {
     
     ws.on('message', (data) => {
       try {
@@ -40,7 +38,6 @@ export class ScriptExecutionHandler {
     });
 
     ws.on('close', () => {
-      console.log('WebSocket connection closed');
       // Clean up any active executions for this connection
       this.cleanupActiveExecutions(ws);
     });

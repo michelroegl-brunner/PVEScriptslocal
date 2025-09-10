@@ -112,13 +112,11 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
   useEffect(() => {
     // Prevent multiple connections in React Strict Mode
     if (hasConnectedRef.current || isConnectingRef.current || (wsRef.current && wsRef.current.readyState === WebSocket.OPEN)) {
-      console.log('WebSocket already connected, connecting, or has connected, skipping...');
       return;
     }
 
     // Close any existing connection first
     if (wsRef.current) {
-      console.log('Closing existing WebSocket connection');
       wsRef.current.close();
       wsRef.current = null;
     }
@@ -132,14 +130,10 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws/script-execution`;
       
-      console.log('Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('WebSocket connected successfully');
-        console.log('Script path:', scriptPath);
-        console.log('Execution ID:', executionId);
         setIsConnected(true);
         isConnectingRef.current = false;
         
@@ -154,7 +148,6 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
       ws.onmessage = (event) => {
         try {
           const message: TerminalMessage = JSON.parse(event.data);
-          console.log('Received message:', message);
           handleMessage(message);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -162,7 +155,6 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
       };
 
       ws.onclose = (event) => {
-        console.log('WebSocket disconnected:', event.code, event.reason);
         setIsConnected(false);
         setIsRunning(false);
         isConnectingRef.current = false;
@@ -184,7 +176,6 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
       isConnectingRef.current = false;
       hasConnectedRef.current = false;
       if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
-        console.log('Cleaning up WebSocket connection');
         wsRef.current.close();
       }
     };
