@@ -17,10 +17,10 @@ export function ScriptCard({ script, onClick }: ScriptCardProps) {
 
   return (
     <div
-      className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 cursor-pointer border border-gray-200 hover:border-blue-300"
+      className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 cursor-pointer border border-gray-200 hover:border-blue-300 h-full flex flex-col"
       onClick={() => onClick(script)}
     >
-      <div className="p-6">
+      <div className="p-6 flex-1 flex flex-col">
         {/* Header with logo and name */}
         <div className="flex items-start space-x-4 mb-4">
           <div className="flex-shrink-0">
@@ -43,31 +43,48 @@ export function ScriptCard({ script, onClick }: ScriptCardProps) {
             <h3 className="text-lg font-semibold text-gray-900 truncate">
               {script.name || 'Unnamed Script'}
             </h3>
-            <div className="flex items-center space-x-2 mt-1">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                script.type === 'ct' 
-                  ? 'bg-blue-100 text-blue-800' 
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {script.type?.toUpperCase() || 'UNKNOWN'}
-              </span>
-              {script.updateable && (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                  Updateable
+            <div className="mt-2 space-y-2">
+              {/* Type and Updateable status on first row */}
+              <div className="flex items-center space-x-2">
+                <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                  script.type === 'ct' 
+                    ? 'bg-blue-100 text-blue-800' 
+                    : script.type === 'addon'
+                    ? 'bg-purple-100 text-purple-800'
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {script.type?.toUpperCase() || 'UNKNOWN'}
                 </span>
-              )}
+                {script.updateable && (
+                  <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                    Updateable
+                  </span>
+                )}
+              </div>
+              
+              {/* Download Status */}
+              <div className="flex items-center space-x-1">
+                <div className={`w-2 h-2 rounded-full ${
+                  script.isDownloaded ? 'bg-green-500' : 'bg-red-500'
+                }`}></div>
+                <span className={`text-xs font-medium ${
+                  script.isDownloaded ? 'text-green-700' : 'text-red-700'
+                }`}>
+                  {script.isDownloaded ? 'Downloaded' : 'Not Downloaded'}
+                </span>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Description */}
-        <p className="text-gray-600 text-sm line-clamp-3 mb-4">
+        <p className="text-gray-600 text-sm line-clamp-3 mb-4 flex-1">
           {script.description || 'No description available'}
         </p>
 
         {/* Footer with website link */}
         {script.website && (
-          <div className="flex items-center justify-between">
+          <div className="mt-auto">
             <a
               href={script.website}
               target="_blank"

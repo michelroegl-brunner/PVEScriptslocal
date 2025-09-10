@@ -49,6 +49,9 @@ export interface ScriptCard {
   type: string;
   updateable: boolean;
   website: string | null;
+  source?: 'github' | 'local';
+  isDownloaded?: boolean;
+  localPath?: string;
 }
 
 export interface GitHubFile {

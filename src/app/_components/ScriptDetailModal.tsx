@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { api } from '~/trpc/react';
 import type { Script } from '~/types/script';
+import { DiffViewer } from './DiffViewer';
+import { TextViewer } from './TextViewer';
 
 interface ScriptDetailModalProps {
   script: Script | null;
@@ -15,11 +17,20 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadMessage, setLoadMessage] = useState<string | null>(null);
+  const [diffViewerOpen, setDiffViewerOpen] = useState(false);
+  const [selectedDiffFile, setSelectedDiffFile] = useState<string | null>(null);
+  const [textViewerOpen, setTextViewerOpen] = useState(false);
 
   // Check if script files exist locally
   const { data: scriptFilesData, refetch: refetchScriptFiles } = api.scripts.checkScriptFiles.useQuery(
     { slug: script?.slug ?? '' },
     { enabled: !!script && isOpen }
+  );
+
+  // Compare local and remote script content
+  const { data: comparisonData, refetch: refetchComparison } = api.scripts.compareScriptContent.useQuery(
+    { slug: script?.slug ?? '' },
+    { enabled: !!script && isOpen && scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists) }
   );
 
   // Load script mutation
@@ -29,8 +40,9 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
       if (data.success) {
         const message = 'message' in data ? data.message : 'Script loaded successfully';
         setLoadMessage(`✅ ${message}`);
-        // Refetch script files status to update the UI
+        // Refetch script files status and comparison data to update the UI
         refetchScriptFiles();
+        refetchComparison();
       } else {
         const error = 'error' in data ? data.error : 'Failed to load script';
         setLoadMessage(`❌ ${error}`);
@@ -76,6 +88,15 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
       onInstallScript(scriptPath, scriptName);
       onClose(); // Close the modal when starting installation
     }
+  };
+
+  const handleShowDiff = (filePath: string) => {
+    setSelectedDiffFile(filePath);
+    setDiffViewerOpen(true);
+  };
+
+  const handleViewScript = () => {
+    setTextViewerOpen(true);
   };
 
   return (
@@ -137,31 +158,96 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
                 <span>Install</span>
               </button>
             )}
+
+            {/* View Button - only show if script files exist */}
+            {scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists) && (
+              <button
+                onClick={handleViewScript}
+                className="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors bg-purple-600 text-white hover:bg-purple-700"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <span>View</span>
+              </button>
+            )}
             
-            {/* Load Script Button */}
-            <button
-              onClick={handleLoadScript}
-              disabled={isLoading}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                isLoading
-                  ? 'bg-gray-400 text-white cursor-not-allowed'
-                  : 'bg-green-600 text-white hover:bg-green-700'
-              }`}
-            >
-              {isLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Loading...</span>
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <span>Load Script</span>
-                </>
-              )}
-            </button>
+            {/* Load/Update Script Button */}
+            {(() => {
+              const hasLocalFiles = scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists);
+              const hasDifferences = comparisonData?.success && comparisonData.hasDifferences;
+              const isUpToDate = hasLocalFiles && !hasDifferences;
+              
+              if (!hasLocalFiles) {
+                // No local files - show Load Script button
+                return (
+                  <button
+                    onClick={handleLoadScript}
+                    disabled={isLoading}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      isLoading
+                        ? 'bg-gray-400 text-white cursor-not-allowed'
+                        : 'bg-green-600 text-white hover:bg-green-700'
+                    }`}
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Loading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Load Script</span>
+                      </>
+                    )}
+                  </button>
+                );
+              } else if (isUpToDate) {
+                // Local files exist and are up to date - show disabled Update button
+                return (
+                  <button
+                    disabled
+                    className="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors bg-gray-400 text-white cursor-not-allowed"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>Up to Date</span>
+                  </button>
+                );
+              } else {
+                // Local files exist but have differences - show Update button
+                return (
+                  <button
+                    onClick={handleLoadScript}
+                    disabled={isLoading}
+                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+                      isLoading
+                        ? 'bg-gray-400 text-white cursor-not-allowed'
+                        : 'bg-orange-600 text-white hover:bg-orange-700'
+                    }`}
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        <span>Updating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        <span>Update Script</span>
+                      </>
+                    )}
+                  </button>
+                );
+              }
+            })()}
             <button
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -192,10 +278,38 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
                 <div className={`w-2 h-2 rounded-full ${scriptFilesData.installExists ? 'bg-green-500' : 'bg-gray-300'}`}></div>
                 <span>Install Script: {scriptFilesData.installExists ? 'Available' : 'Not loaded'}</span>
               </div>
+              {scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists) && comparisonData?.success && (
+                <div className="flex items-center space-x-2">
+                  <div className={`w-2 h-2 rounded-full ${comparisonData.hasDifferences ? 'bg-orange-500' : 'bg-green-500'}`}></div>
+                  <span>Status: {comparisonData.hasDifferences ? 'Update available' : 'Up to date'}</span>
+                </div>
+              )}
             </div>
             {scriptFilesData.files.length > 0 && (
               <div className="mt-2 text-xs text-gray-600">
                 Files: {scriptFilesData.files.join(', ')}
+              </div>
+            )}
+            {scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists) && 
+             comparisonData?.success && comparisonData.hasDifferences && comparisonData.differences.length > 0 && (
+              <div className="mt-2">
+                <div className="text-xs text-orange-600 mb-2">
+                  Differences in: {comparisonData.differences.join(', ')}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {comparisonData.differences.map((filePath, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleShowDiff(filePath)}
+                      className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors flex items-center space-x-1"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>Show Diff: {filePath}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -372,6 +486,28 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
           )}
         </div>
       </div>
+
+      {/* Diff Viewer Modal */}
+      {selectedDiffFile && (
+        <DiffViewer
+          scriptSlug={script.slug}
+          filePath={selectedDiffFile}
+          isOpen={diffViewerOpen}
+          onClose={() => {
+            setDiffViewerOpen(false);
+            setSelectedDiffFile(null);
+          }}
+        />
+      )}
+
+      {/* Text Viewer Modal */}
+      {script && (
+        <TextViewer
+          scriptName={script.install_methods?.find(method => method.script?.startsWith('ct/'))?.script?.split('/').pop() || `${script.slug}.sh`}
+          isOpen={textViewerOpen}
+          onClose={() => setTextViewerOpen(false)}
+        />
+      )}
     </div>
   );
 }

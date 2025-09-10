@@ -1,7 +1,7 @@
-import { readdir, stat, access } from 'fs/promises';
+import { readdir, stat } from 'fs/promises';
 import { join, resolve, extname } from 'path';
 import { env } from '~/env.js';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
 import { localScriptsService } from '~/server/services/localScripts';
 
 export interface ScriptInfo {
@@ -98,7 +98,6 @@ export class ScriptManager {
               logo = scriptData?.logo || undefined;
             } catch (error) {
               // JSON file might not exist, that's okay
-              console.log(`No JSON data found for ${slug}:`, error);
             }
             
             scripts.push({
@@ -226,7 +225,6 @@ export class ScriptManager {
     const timeout = setTimeout(() => {
       if (!childProcess.killed) {
         childProcess.kill('SIGTERM');
-        console.log(`Script execution timed out after ${this.maxExecutionTime}ms`);
       }
     }, this.maxExecutionTime);
 

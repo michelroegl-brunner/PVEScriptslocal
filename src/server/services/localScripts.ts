@@ -94,7 +94,6 @@ export class LocalScriptsService {
         await writeFile(filePath, content, 'utf-8');
       }
 
-      console.log(`Successfully saved ${scripts.length} scripts to ${this.scriptsDirectory}`);
     } catch (error) {
       console.error('Error saving scripts from GitHub:', error);
       throw new Error('Failed to save scripts from GitHub');

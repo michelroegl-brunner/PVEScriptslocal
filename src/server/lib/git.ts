@@ -1,4 +1,4 @@
-import { simpleGit, SimpleGit } from 'simple-git';
+import { simpleGit, type SimpleGit } from 'simple-git';
 import { env } from '~/env.js';
 import { join } from 'path';
 
@@ -77,14 +77,13 @@ export class GitManager {
         return { success: false, message: 'No repository URL configured' };
       }
 
-      console.log(`Cloning repository from ${env.REPO_URL}...`);
       
       // Clone the repository
-      await this.git.clone(env.REPO_URL, this.repoPath, {
-        '--branch': env.REPO_BRANCH,
-        '--single-branch': true,
-        '--depth': 1
-      });
+      await this.git.clone(env.REPO_URL, this.repoPath, [
+        '--branch', env.REPO_BRANCH,
+        '--single-branch',
+        '--depth', '1'
+      ]);
 
       return {
         success: true,
@@ -105,32 +104,23 @@ export class GitManager {
   async initializeRepository(): Promise<void> {
     try {
       if (!env.REPO_URL) {
-        console.log('No remote repository configured, skipping initialization');
         return;
       }
 
       const isRepo = await this.git.checkIsRepo();
       if (!isRepo) {
-        console.log('Repository not found, cloning...');
         const result = await this.cloneRepository();
         if (result.success) {
-          console.log('Repository initialized successfully');
         } else {
-          console.error('Failed to initialize repository:', result.message);
         }
       } else {
-        console.log('Repository already exists, checking for updates...');
         const behind = await this.isBehindRemote();
         if (behind) {
-          console.log('Repository is behind remote, pulling updates...');
           const result = await this.pullUpdates();
           if (result.success) {
-            console.log('Repository updated successfully');
           } else {
-            console.error('Failed to update repository:', result.message);
           }
         } else {
-          console.log('Repository is up to date');
         }
       }
     } catch (error) {
@@ -160,8 +150,8 @@ export class GitManager {
       return {
         isRepo: true,
         isBehind,
-        lastCommit: log.latest?.hash,
-        branch: status.current
+        lastCommit: log.latest?.hash || undefined,
+        branch: status.current || undefined
       };
     } catch (error) {
       console.error('Error getting repository status:', error);

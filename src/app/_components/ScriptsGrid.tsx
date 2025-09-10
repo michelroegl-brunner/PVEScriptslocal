@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { api } from '~/trpc/react';
 import { ScriptCard } from './ScriptCard';
 import { ScriptDetailModal } from './ScriptDetailModal';
-import type { ScriptCard as ScriptCardType, Script } from '~/types/script';
+
 
 interface ScriptsGridProps {
   onInstallScript?: (scriptPath: string, scriptName: string) => void;
@@ -13,22 +13,86 @@ interface ScriptsGridProps {
 export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const { data: scriptCardsData, isLoading, error, refetch } = api.scripts.getScriptCards.useQuery();
+  const { data: scriptCardsData, isLoading: githubLoading, error: githubError, refetch } = api.scripts.getScriptCards.useQuery();
+  const { data: localScriptsData, isLoading: localLoading, error: localError } = api.scripts.getCtScripts.useQuery();
   const { data: scriptData } = api.scripts.getScriptBySlug.useQuery(
     { slug: selectedSlug ?? '' },
     { enabled: !!selectedSlug }
   );
 
-  // Debug logging
-  console.log('ScriptsGrid render:', { 
-    isLoading, 
-    error: error?.message, 
-    scriptCardsData: scriptCardsData?.success, 
-    cardsCount: scriptCardsData?.cards?.length 
-  });
+  // Get GitHub scripts with download status
+  const combinedScripts = React.useMemo(() => {
+    const githubScripts = scriptCardsData?.success ? scriptCardsData.cards
+      .filter(script => script && script.name) // Filter out invalid scripts
+      .map(script => ({
+        ...script,
+        source: 'github' as const,
+        isDownloaded: false, // Will be updated by status check
+        isUpToDate: false,   // Will be updated by status check
+      })) : [];
 
-  const handleCardClick = (scriptCard: ScriptCardType) => {
+    return githubScripts;
+  }, [scriptCardsData]);
+
+
+  // Update scripts with download status
+  const scriptsWithStatus = React.useMemo(() => {
+    return combinedScripts.map(script => {
+      if (!script || !script.name) {
+        return script; // Return as-is if invalid
+      }
+      
+      // Check if there's a corresponding local script
+      const hasLocalVersion = localScriptsData?.scripts?.some(local => {
+        if (!local || !local.name) return false;
+        const localName = local.name.replace(/\.sh$/, '');
+        return localName.toLowerCase() === script.name.toLowerCase() || 
+               localName.toLowerCase() === (script.slug || '').toLowerCase();
+      }) ?? false;
+      
+      return {
+        ...script,
+        isDownloaded: hasLocalVersion,
+        // Removed isUpToDate - only show in modal for detailed comparison
+      };
+    });
+  }, [combinedScripts, localScriptsData]);
+
+  // Filter scripts based on search query (name and slug only)
+  const filteredScripts = React.useMemo(() => {
+    if (!searchQuery || !searchQuery.trim()) {
+      return scriptsWithStatus;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    
+    // If query is too short, don't filter
+    if (query.length < 1) {
+      return scriptsWithStatus;
+    }
+
+    const filtered = scriptsWithStatus.filter(script => {
+      // Ensure script exists and has required properties
+      if (!script || typeof script !== 'object') {
+        return false;
+      }
+
+      const name = (script.name || '').toLowerCase();
+      const slug = (script.slug || '').toLowerCase();
+
+      const matches = name.includes(query) || slug.includes(query);
+
+      return matches;
+    });
+
+    return filtered;
+  }, [scriptsWithStatus, searchQuery]);
+
+
+  const handleCardClick = (scriptCard: any) => {
+    // All scripts are GitHub scripts, open modal
     setSelectedSlug(scriptCard.slug);
     setIsModalOpen(true);
   };
@@ -38,7 +102,7 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
     setSelectedSlug(null);
   };
 
-  if (isLoading) {
+  if (githubLoading || localLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -47,7 +111,7 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
     );
   }
 
-  if (error || !scriptCardsData?.success) {
+  if (githubError || localError) {
     return (
       <div className="text-center py-12">
         <div className="text-red-600 mb-4">
@@ -56,12 +120,8 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
           </svg>
           <p className="text-lg font-medium">Failed to load scripts</p>
           <p className="text-sm text-gray-500 mt-1">
-            {scriptCardsData?.error || 'Unknown error occurred'}
+            {githubError?.message || localError?.message || 'Unknown error occurred'}
           </p>
-          <div className="mt-4 text-xs text-gray-400">
-            <p>No JSON files found in scripts/json directory.</p>
-            <p>Use the "Resync Scripts" button to download from GitHub.</p>
-          </div>
         </div>
         <button
           onClick={() => refetch()}
@@ -73,9 +133,7 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
     );
   }
 
-  const scripts = scriptCardsData?.cards || [];
-
-  if (!scripts || scripts.length === 0) {
+  if (!scriptsWithStatus || scriptsWithStatus.length === 0) {
     return (
       <div className="text-center py-12">
         <div className="text-gray-500">
@@ -84,7 +142,7 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
           </svg>
           <p className="text-lg font-medium">No scripts found</p>
           <p className="text-sm text-gray-500 mt-1">
-            No script files were found in the repository.
+            No script files were found in the repository or local directory.
           </p>
         </div>
       </div>
@@ -93,11 +151,67 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {scripts.map((script, index) => {
+      {/* Search Bar */}
+      <div className="mb-8">
+        <div className="relative max-w-md mx-auto">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            placeholder="Search scripts by name..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {searchQuery && (
+          <div className="text-center mt-2 text-sm text-gray-600">
+            {filteredScripts.length === 0 ? (
+              <span>No scripts found matching "{searchQuery}"</span>
+            ) : (
+              <span>Found {filteredScripts.length} script{filteredScripts.length !== 1 ? 's' : ''} matching "{searchQuery}"</span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Scripts Grid */}
+      {filteredScripts.length === 0 && searchQuery ? (
+        <div className="text-center py-12">
+          <div className="text-gray-500">
+            <svg className="w-12 h-12 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <p className="text-lg font-medium">No matching scripts found</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Try adjusting your search terms or clear the search to see all scripts.
+            </p>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Clear Search
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredScripts.map((script, index) => {
           // Add validation to ensure script has required properties
           if (!script || typeof script !== 'object') {
-            console.warn('Invalid script object at index', index, script);
             return null;
           }
           
@@ -109,7 +223,8 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
             />
           );
         })}
-      </div>
+        </div>
+      )}
 
       <ScriptDetailModal
         script={scriptData?.success ? scriptData.script : null}

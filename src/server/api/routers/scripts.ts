@@ -219,5 +219,65 @@ export const scriptsRouter = createTRPCRouter({
           files: []
         };
       }
+    }),
+
+  // Compare local and remote script content
+  compareScriptContent: publicProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const script = await localScriptsService.getScriptBySlug(input.slug);
+        if (!script) {
+          return {
+            success: false,
+            error: 'Script not found',
+            hasDifferences: false,
+            differences: []
+          };
+        }
+
+        const result = await scriptDownloaderService.compareScriptContent(script);
+        return {
+          success: true,
+          ...result
+        };
+      } catch (error) {
+        console.error('Error in compareScriptContent:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to compare script content',
+          hasDifferences: false,
+          differences: []
+        };
+      }
+    }),
+
+  // Get diff content for a specific script file
+  getScriptDiff: publicProcedure
+    .input(z.object({ slug: z.string(), filePath: z.string() }))
+    .query(async ({ input }) => {
+      try {
+        const script = await localScriptsService.getScriptBySlug(input.slug);
+        if (!script) {
+          return {
+            success: false,
+            error: 'Script not found',
+            diff: null
+          };
+        }
+
+        const result = await scriptDownloaderService.getScriptDiff(script, input.filePath);
+        return {
+          success: true,
+          ...result
+        };
+      } catch (error) {
+        console.error('Error in getScriptDiff:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get script diff',
+          diff: null
+        };
+      }
     })
 });

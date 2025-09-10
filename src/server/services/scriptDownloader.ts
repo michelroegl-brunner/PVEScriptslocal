@@ -93,7 +93,6 @@ export class ScriptDownloaderService {
         files.push(`install/${installScriptName}`);
       } catch (error) {
         // Install script might not exist, that's okay
-        console.log(`Install script not found for ${script.slug}: ${error}`);
       }
 
       return {
@@ -152,6 +151,209 @@ export class ScriptDownloaderService {
       console.error('Error checking script existence:', error);
       return { ctExists: false, installExists: false, files: [] };
     }
+  }
+
+  async compareScriptContent(script: Script): Promise<{ hasDifferences: boolean; differences: string[] }> {
+    const differences: string[] = [];
+    let hasDifferences = false;
+
+    try {
+      // First check if any local files exist
+      const localFilesExist = await this.checkScriptExists(script);
+      if (!localFilesExist.ctExists && !localFilesExist.installExists) {
+        // No local files exist, so no comparison needed
+        return { hasDifferences: false, differences: [] };
+      }
+
+      // Compare CT script only if it exists locally
+      if (localFilesExist.ctExists && script.install_methods && script.install_methods.length > 0) {
+        for (const method of script.install_methods) {
+          if (method.script && method.script.startsWith('ct/')) {
+            const fileName = method.script.split('/').pop();
+            if (fileName) {
+              const localPath = join(this.scriptsDirectory, 'ct', fileName);
+              try {
+                // Read local content
+                const localContent = await readFile(localPath, 'utf-8');
+                
+                // Download remote content
+                const remoteContent = await this.downloadFileFromGitHub(method.script);
+                
+                // Apply the same modification that would be applied during load
+                const modifiedRemoteContent = this.modifyScriptContent(remoteContent);
+                
+                // Compare content
+                if (localContent !== modifiedRemoteContent) {
+                  hasDifferences = true;
+                  differences.push(`ct/${fileName}`);
+                }
+              } catch (error) {
+                console.error(`Error comparing CT script ${fileName}:`, error);
+                // Don't add to differences if there's an error reading files
+              }
+            }
+          }
+        }
+      }
+
+      // Compare install script only if it exists locally
+      if (localFilesExist.installExists) {
+        const installScriptName = `${script.slug}-install.sh`;
+        const localInstallPath = join(this.scriptsDirectory, 'install', installScriptName);
+        try {
+          // Read local content
+          const localContent = await readFile(localInstallPath, 'utf-8');
+          
+          // Download remote content
+          const remoteContent = await this.downloadFileFromGitHub(`install/${installScriptName}`);
+          
+          // Apply the same modification that would be applied during load
+          const modifiedRemoteContent = this.modifyScriptContent(remoteContent);
+          
+          // Compare content
+          if (localContent !== modifiedRemoteContent) {
+            hasDifferences = true;
+            differences.push(`install/${installScriptName}`);
+          }
+        } catch (error) {
+          console.error(`Error comparing install script ${installScriptName}:`, error);
+          // Don't add to differences if there's an error reading files
+        }
+      }
+
+      return { hasDifferences, differences };
+    } catch (error) {
+      console.error('Error comparing script content:', error);
+      return { hasDifferences: false, differences: [] };
+    }
+  }
+
+  async getScriptDiff(script: Script, filePath: string): Promise<{ diff: string | null; localContent: string | null; remoteContent: string | null }> {
+    try {
+      let localContent: string | null = null;
+      let remoteContent: string | null = null;
+
+      if (filePath.startsWith('ct/')) {
+        // Handle CT script
+        const fileName = filePath.split('/').pop();
+        if (fileName) {
+          const localPath = join(this.scriptsDirectory, 'ct', fileName);
+          try {
+            localContent = await readFile(localPath, 'utf-8');
+          } catch (error) {
+            console.error('Error reading local CT script:', error);
+          }
+
+          try {
+            // Find the corresponding script path in install_methods
+            const method = script.install_methods?.find(m => m.script === filePath);
+            if (method?.script) {
+              const downloadedContent = await this.downloadFileFromGitHub(method.script);
+              remoteContent = this.modifyScriptContent(downloadedContent);
+            }
+          } catch (error) {
+            console.error('Error downloading remote CT script:', error);
+          }
+        }
+      } else if (filePath.startsWith('install/')) {
+        // Handle install script
+        const localPath = join(this.scriptsDirectory, filePath);
+        try {
+          localContent = await readFile(localPath, 'utf-8');
+        } catch (error) {
+          console.error('Error reading local install script:', error);
+        }
+
+        try {
+          remoteContent = await this.downloadFileFromGitHub(filePath);
+        } catch (error) {
+          console.error('Error downloading remote install script:', error);
+        }
+      }
+
+      if (!localContent || !remoteContent) {
+        return { diff: null, localContent, remoteContent };
+      }
+
+      // Generate diff using a simple line-by-line comparison
+      const diff = this.generateDiff(localContent, remoteContent);
+      return { diff, localContent, remoteContent };
+    } catch (error) {
+      console.error('Error getting script diff:', error);
+      return { diff: null, localContent: null, remoteContent: null };
+    }
+  }
+
+  private generateDiff(localContent: string, remoteContent: string): string {
+    const localLines = localContent.split('\n');
+    const remoteLines = remoteContent.split('\n');
+    
+    let diff = '';
+    let i = 0;
+    let j = 0;
+
+    while (i < localLines.length || j < remoteLines.length) {
+      const localLine = localLines[i];
+      const remoteLine = remoteLines[j];
+
+      if (i >= localLines.length) {
+        // Only remote lines left
+        diff += `+${j + 1}: ${remoteLine}\n`;
+        j++;
+      } else if (j >= remoteLines.length) {
+        // Only local lines left
+        diff += `-${i + 1}: ${localLine}\n`;
+        i++;
+      } else if (localLine === remoteLine) {
+        // Lines are the same
+        diff += ` ${i + 1}: ${localLine}\n`;
+        i++;
+        j++;
+      } else {
+        // Lines are different - find the best match
+        let found = false;
+        for (let k = j + 1; k < Math.min(j + 10, remoteLines.length); k++) {
+          if (localLine === remoteLines[k]) {
+            // Found match in remote, local line was removed
+            for (let l = j; l < k; l++) {
+              diff += `+${l + 1}: ${remoteLines[l]}\n`;
+            }
+            diff += ` ${i + 1}: ${localLine}\n`;
+            i++;
+            j = k + 1;
+            found = true;
+            break;
+          }
+        }
+        
+        if (!found) {
+          for (let k = i + 1; k < Math.min(i + 10, localLines.length); k++) {
+            if (remoteLine === localLines[k]) {
+              // Found match in local, remote line was added
+              diff += `-${i + 1}: ${localLine}\n`;
+              for (let l = i + 1; l < k; l++) {
+                diff += `-${l + 1}: ${localLines[l]}\n`;
+              }
+              diff += `+${j + 1}: ${remoteLine}\n`;
+              i = k + 1;
+              j++;
+              found = true;
+              break;
+            }
+          }
+        }
+        
+        if (!found) {
+          // No match found, lines are different
+          diff += `-${i + 1}: ${localLine}\n`;
+          diff += `+${j + 1}: ${remoteLine}\n`;
+          i++;
+          j++;
+        }
+      }
+    }
+
+    return diff;
   }
 }
 
