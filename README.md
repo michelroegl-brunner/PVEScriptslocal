@@ -63,29 +63,7 @@ Copy the example environment file and configure your settings:
 cp .env.example .env
 ```
 
-Edit `.env` with your configuration:
-
-```env
-# Database Configuration
-DATABASE_URL="postgresql://postgres:password@localhost:5432/pve-scripts-local"
-
-# GitHub Repository Configuration
-REPO_URL="https://github.com/community-scripts/ProxmoxVE"
-REPO_BRANCH="main"
-SCRIPTS_DIRECTORY="scripts/ct"
-
-# Security Settings
-MAX_SCRIPT_EXECUTION_TIME="300000"
-ALLOWED_SCRIPT_PATHS="scripts/"
-
-# WebSocket Configuration
-WEBSOCKET_PORT="3000"
-```
-
-
 ### 4. Start the Application
-
-
 
 #### Production Mode
 ```bash
@@ -150,25 +128,6 @@ PVESciptslocal/
 ```
 
 
-## 🔧 Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|np,
-| `REPO_URL` | GitHub repository URL | Required |
-| `REPO_BRANCH` | Git branch to use | `main` |
-| `SCRIPTS_DIRECTORY` | Local scripts directory | `scripts/ct` |
-| `MAX_SCRIPT_EXECUTION_TIME` | Max execution time (ms) | `300000` |
-| `ALLOWED_SCRIPT_PATHS` | Allowed script paths | `scripts/` |
-
-### Database Configuration
-
-The application uses PostgreSQL with Prisma ORM. The database stores:
-- Script metadata and descriptions
-- Execution history and logs
-- User preferences and settings
-
 ## 🚀 Development
 
 ### Prerequisites for Development
@@ -180,17 +139,18 @@ The application uses PostgreSQL with Prisma ORM. The database stores:
 ```bash
 # Install dependencies
 npm install
+```
 
 # Start development server
+```bash
 npm run dev:server
-
+```
 
 ### Project Structure for Developers
 
 - **Frontend**: React components in `src/app/_components/`
 - **Backend**: Server logic in `src/server/`
 - **API**: tRPC routers for type-safe API communication
-- **Database**: Prisma schema in `prisma/schema.prisma`
 - **Scripts**: Bash scripts in `scripts/` directory
 
 ## 🤝 Contributing
@@ -201,12 +161,6 @@ npm run dev:server
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-### Adding New Scripts
-
-1. Create a new `.sh` file in the appropriate directory (`scripts/ct/` for containers)
-2. Follow the existing script structure and include proper headers
-3. Test the script thoroughly
-4. Submit a pull request with the new script
 
 ## 📝 License
 
@@ -215,9 +169,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Logs
 
 - Server logs: Check console output or `server.log`
-- Database logs: Check PostgreSQL logs
 - Script execution: View in web terminal
-
 
 ---
 
