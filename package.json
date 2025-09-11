@@ -6,10 +6,6 @@
   "scripts": {
     "build": "next build",
     "check": "next lint && tsc --noEmit",
-    "db:generate": "prisma migrate dev",
-    "db:migrate": "prisma migrate deploy",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
     "dev": "next dev",
     "dev:server": "node server.js",
     "dev:next": "next dev --turbo",
@@ -26,7 +22,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "^6.16.0",
     "@t3-oss/env-nextjs": "^0.13.8",
     "@tanstack/react-query": "^5.87.4",
     "@trpc/client": "^11.0.0",
@@ -69,7 +64,6 @@
     "postcss": "^8.5.3",
     "prettier": "^3.5.3",
     "prettier-plugin-tailwindcss": "^0.6.11",
-    "prisma": "^6.5.0",
     "tailwindcss": "^4.0.15",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.27.0",

@@ -119,7 +119,6 @@ PVESciptslocal/
 │   │   └── page.tsx          # Main page
 │   └── server/               # Server-side code
 │       └── services/         # Business logic services
-├── prisma/                   # Database schema
 ├── public/                   # Static assets
 ├── server.js                 # Main server file
 └── package.json              # Dependencies and scripts
