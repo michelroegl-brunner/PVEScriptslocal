@@ -22,7 +22,10 @@ export class ScriptManager {
   private maxExecutionTime: number;
 
   constructor() {
-    this.scriptsDir = join(process.cwd(), env.SCRIPTS_DIRECTORY);
+    // Handle both absolute and relative paths for testing
+    this.scriptsDir = env.SCRIPTS_DIRECTORY.startsWith('/') 
+      ? env.SCRIPTS_DIRECTORY 
+      : join(process.cwd(), env.SCRIPTS_DIRECTORY);
     this.allowedExtensions = env.ALLOWED_SCRIPT_EXTENSIONS.split(',').map(ext => ext.trim());
     this.allowedPaths = env.ALLOWED_SCRIPT_PATHS.split(',').map(path => path.trim());
     this.maxExecutionTime = parseInt(env.MAX_SCRIPT_EXECUTION_TIME, 10);
@@ -153,9 +156,17 @@ export class ScriptManager {
 
     // Check if the script path matches any allowed path pattern
     const relativePath = resolvedPath.replace(scriptsDirResolved, '').replace(/\\/g, '/');
-    const isAllowed = this.allowedPaths.some(allowedPath => 
-      relativePath.startsWith(allowedPath.replace(/\\/g, '/'))
-    );
+    const normalizedRelativePath = relativePath.startsWith('/') ? relativePath : '/' + relativePath;
+    
+    const isAllowed = this.allowedPaths.some(allowedPath => {
+      const normalizedAllowedPath = allowedPath.startsWith('/') ? allowedPath : '/' + allowedPath;
+      // For root path '/', allow files directly in the scripts directory (no subdirectories)
+      if (normalizedAllowedPath === '/') {
+        return normalizedRelativePath === '/' || (normalizedRelativePath.startsWith('/') && !normalizedRelativePath.substring(1).includes('/'));
+      }
+      // For other paths like '/ct/', check if the path starts with it
+      return normalizedRelativePath.startsWith(normalizedAllowedPath);
+    });
 
     if (!isAllowed) {
       return {
