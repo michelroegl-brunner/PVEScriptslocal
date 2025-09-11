@@ -156,7 +156,6 @@ PVESciptslocal/
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABASE_URL` | PostgreSQL connection string | Required |
 | `REPO_URL` | GitHub repository URL | Required |
 | `REPO_BRANCH` | Git branch to use | `main` |
 | `SCRIPTS_DIRECTORY` | Local scripts directory | `scripts/ct` |
@@ -173,8 +172,7 @@ The application uses PostgreSQL with Prisma ORM. The database stores:
 ## 🚀 Development
 
 ### Prerequisites for Development
-- Node.js 18+
-- PostgreSQL or Docker
+- Node.js 22+
 - Git
 
 ### Development Commands
