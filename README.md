@@ -24,7 +24,6 @@ A modern web-based management interface for Proxmox VE (PVE) helper scripts. Thi
 
 ### Backend
 - **Node.js** server with WebSocket support
-- **PostgreSQL** database with Prisma ORM
 - **WebSocket Server** for real-time script execution
 - **Script Downloader Service** for GitHub integration
 
@@ -35,10 +34,9 @@ A modern web-based management interface for Proxmox VE (PVE) helper scripts. Thi
 
 ## 📋 Prerequisites
 
-- **Node.js** 18+ and npm
-- **PostgreSQL** database (or Docker/Podman for local development)
+- **Node.js** 22+ and npm
 - **Git** for cloning the repository
-- **Linux/Unix environment** (tested on Proxmox VE hosts)
+- **Proxmox VE environment** 
 
 ## 🚀 Installation
 
