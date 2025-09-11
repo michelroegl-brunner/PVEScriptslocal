@@ -1,23 +1,29 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 
-// Mock the dependencies before importing ScriptManager
-vi.mock('fs/promises', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('fs/promises')>()
-  return {
-    ...actual,
-    readdir: vi.fn(),
-    stat: vi.fn(),
-    readFile: vi.fn(),
-  }
-})
+// Create mock functions using vi.hoisted
+const mockReaddir = vi.hoisted(() => vi.fn())
+const mockStat = vi.hoisted(() => vi.fn())
+const mockReadFile = vi.hoisted(() => vi.fn())
+const mockSpawn = vi.hoisted(() => vi.fn())
 
-vi.mock('child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('child_process')>()
-  return {
-    ...actual,
-    spawn: vi.fn(),
+// Mock the dependencies before importing ScriptManager
+vi.mock('fs/promises', () => ({
+  readdir: mockReaddir,
+  stat: mockStat,
+  readFile: mockReadFile,
+  default: {
+    readdir: mockReaddir,
+    stat: mockStat,
+    readFile: mockReadFile,
   }
-})
+}))
+
+vi.mock('child_process', () => ({
+  spawn: mockSpawn,
+  default: {
+    spawn: mockSpawn,
+  }
+}))
 
 vi.mock('~/env.js', () => ({
   env: {
@@ -62,8 +68,7 @@ describe('ScriptManager', () => {
 
   describe('getScripts', () => {
     it('should return empty array when directory read fails', async () => {
-      const { readdir } = await import('fs/promises')
-      vi.mocked(readdir).mockRejectedValue(new Error('Directory not found'))
+      mockReaddir.mockRejectedValue(new Error('Directory not found'))
 
       const scripts = await scriptManager.getScripts()
 
@@ -72,16 +77,27 @@ describe('ScriptManager', () => {
 
     it('should return scripts with correct properties', async () => {
       const mockFiles = ['script1.sh', 'script2.py', 'script3.js', 'readme.txt']
-      const { readdir, stat } = await import('fs/promises')
       
-      vi.mocked(readdir).mockResolvedValue(mockFiles)
-      vi.mocked(stat).mockResolvedValue({
-        isFile: () => true,
-        isDirectory: () => false,
-        size: 1024,
-        mtime: new Date('2024-01-01T00:00:00Z'),
-        mode: 0o755, // executable permissions
-      } as any)
+      mockReaddir.mockResolvedValue(mockFiles)
+      mockStat.mockImplementation((filePath) => {
+        // Mock different responses based on file path
+        if (filePath.includes('script1.sh') || filePath.includes('script2.py') || filePath.includes('script3.js')) {
+          return Promise.resolve({
+            isFile: () => true,
+            isDirectory: () => false,
+            size: 1024,
+            mtime: new Date('2024-01-01T00:00:00Z'),
+            mode: 0o755, // executable permissions
+          } as any)
+        }
+        return Promise.resolve({
+          isFile: () => false,
+          isDirectory: () => true,
+          size: 0,
+          mtime: new Date('2024-01-01T00:00:00Z'),
+          mode: 0o755,
+        } as any)
+      })
 
       const scripts = await scriptManager.getScripts()
 
@@ -111,10 +127,9 @@ describe('ScriptManager', () => {
 
     it('should sort scripts alphabetically', async () => {
       const mockFiles = ['z_script.sh', 'a_script.sh', 'm_script.sh']
-      const { readdir, stat } = await import('fs/promises')
       
-      vi.mocked(readdir).mockResolvedValue(mockFiles)
-      vi.mocked(stat).mockResolvedValue({
+      mockReaddir.mockResolvedValue(mockFiles)
+      mockStat.mockResolvedValue({
         isFile: () => true,
         isDirectory: () => false,
         size: 1024,
@@ -131,10 +146,16 @@ describe('ScriptManager', () => {
   describe('getCtScripts', () => {
     it('should return ct scripts with slug and logo', async () => {
       const mockFiles = ['test-script.sh']
-      const { readdir, stat } = await import('fs/promises')
       
-      vi.mocked(readdir).mockResolvedValue(mockFiles)
-      vi.mocked(stat).mockResolvedValue({
+      // Mock readdir for the ct directory
+      mockReaddir.mockImplementation((dirPath) => {
+        if (dirPath.includes('/ct')) {
+          return Promise.resolve(mockFiles)
+        }
+        return Promise.resolve([])
+      })
+      
+      mockStat.mockResolvedValue({
         isFile: () => true,
         isDirectory: () => false,
         size: 1024,
@@ -163,10 +184,16 @@ describe('ScriptManager', () => {
 
     it('should handle missing logo gracefully', async () => {
       const mockFiles = ['test-script.sh']
-      const { readdir, stat } = await import('fs/promises')
       
-      vi.mocked(readdir).mockResolvedValue(mockFiles)
-      vi.mocked(stat).mockResolvedValue({
+      // Mock readdir for the ct directory
+      mockReaddir.mockImplementation((dirPath) => {
+        if (dirPath.includes('/ct')) {
+          return Promise.resolve(mockFiles)
+        }
+        return Promise.resolve([])
+      })
+      
+      mockStat.mockResolvedValue({
         isFile: () => true,
         isDirectory: () => false,
         size: 1024,
@@ -222,7 +249,6 @@ describe('ScriptManager', () => {
 
   describe('executeScript', () => {
     it('should execute bash script correctly', async () => {
-      const { spawn } = await import('child_process')
       const mockChildProcess = {
         kill: vi.fn(),
         on: vi.fn(),
@@ -231,11 +257,11 @@ describe('ScriptManager', () => {
         stderr: { on: vi.fn() },
         stdin: { write: vi.fn(), end: vi.fn() },
       }
-      vi.mocked(spawn).mockReturnValue(mockChildProcess as any)
+      mockSpawn.mockReturnValue(mockChildProcess as any)
 
       const childProcess = await scriptManager.executeScript('/test/scripts/script.sh')
 
-      expect(spawn).toHaveBeenCalledWith('bash', ['/test/scripts/script.sh'], {
+      expect(mockSpawn).toHaveBeenCalledWith('bash', ['/test/scripts/script.sh'], {
         cwd: '/test/scripts',
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: true,
@@ -244,7 +270,6 @@ describe('ScriptManager', () => {
     })
 
     it('should execute python script correctly', async () => {
-      const { spawn } = await import('child_process')
       const mockChildProcess = {
         kill: vi.fn(),
         on: vi.fn(),
@@ -253,11 +278,11 @@ describe('ScriptManager', () => {
         stderr: { on: vi.fn() },
         stdin: { write: vi.fn(), end: vi.fn() },
       }
-      vi.mocked(spawn).mockReturnValue(mockChildProcess as any)
+      mockSpawn.mockReturnValue(mockChildProcess as any)
 
       const childProcess = await scriptManager.executeScript('/test/scripts/script.py')
 
-      expect(spawn).toHaveBeenCalledWith('python', ['/test/scripts/script.py'], {
+      expect(mockSpawn).toHaveBeenCalledWith('python', ['/test/scripts/script.py'], {
         cwd: '/test/scripts',
         stdio: ['pipe', 'pipe', 'pipe'],
         shell: true,
@@ -271,7 +296,6 @@ describe('ScriptManager', () => {
 
     it('should set up timeout correctly', async () => {
       vi.useFakeTimers()
-      const { spawn } = await import('child_process')
       const mockChildProcess = {
         kill: vi.fn(),
         on: vi.fn(),
@@ -280,7 +304,7 @@ describe('ScriptManager', () => {
         stderr: { on: vi.fn() },
         stdin: { write: vi.fn(), end: vi.fn() },
       }
-      vi.mocked(spawn).mockReturnValue(mockChildProcess as any)
+      mockSpawn.mockReturnValue(mockChildProcess as any)
 
       await scriptManager.executeScript('/test/scripts/script.sh')
 
@@ -296,13 +320,12 @@ describe('ScriptManager', () => {
   describe('getScriptContent', () => {
     it('should return script content', async () => {
       const mockContent = '#!/bin/bash\necho "Hello World"'
-      const { readFile } = await import('fs/promises')
-      vi.mocked(readFile).mockResolvedValue(mockContent)
+      mockReadFile.mockResolvedValue(mockContent)
 
       const content = await scriptManager.getScriptContent('/test/scripts/script.sh')
 
       expect(content).toBe(mockContent)
-      expect(readFile).toHaveBeenCalledWith('/test/scripts/script.sh', 'utf-8')
+      expect(mockReadFile).toHaveBeenCalledWith('/test/scripts/script.sh', 'utf-8')
     })
 
     it('should throw error for invalid script path', async () => {
