@@ -9,13 +9,13 @@ export class ScriptDownloaderService {
 
   constructor() {
     this.scriptsDirectory = join(process.cwd(), 'scripts');
-    this.repoUrl = env.REPO_URL || '';
+    this.repoUrl = env.REPO_URL ?? '';
   }
 
   private async ensureDirectoryExists(dirPath: string): Promise<void> {
     try {
       await mkdir(dirPath, { recursive: true });
-    } catch (error) {
+    } catch {
       // Directory might already exist, ignore error
     }
   }
@@ -36,7 +36,7 @@ export class ScriptDownloaderService {
   }
 
   private extractRepoPath(): string {
-    const match = this.repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+    const match = /github\.com\/([^\/]+)\/([^\/]+)/.exec(this.repoUrl);
     if (!match) {
       throw new Error('Invalid GitHub repository URL');
     }
@@ -61,9 +61,9 @@ export class ScriptDownloaderService {
       await this.ensureDirectoryExists(join(this.scriptsDirectory, 'install'));
 
       // Download and save CT script
-      if (script.install_methods && script.install_methods.length > 0) {
+      if (script.install_methods?.length) {
         for (const method of script.install_methods) {
-          if (method.script && method.script.startsWith('ct/')) {
+          if (method.script?.startsWith('ct/')) {
             const scriptPath = method.script;
             const fileName = scriptPath.split('/').pop();
             
@@ -91,7 +91,7 @@ export class ScriptDownloaderService {
         const localInstallPath = join(this.scriptsDirectory, 'install', installScriptName);
         await writeFile(localInstallPath, installContent, 'utf-8');
         files.push(`install/${installScriptName}`);
-      } catch (error) {
+      } catch {
         // Install script might not exist, that's okay
       }
 
@@ -117,9 +117,9 @@ export class ScriptDownloaderService {
 
     try {
       // Check CT script
-      if (script.install_methods && script.install_methods.length > 0) {
+      if (script.install_methods?.length) {
         for (const method of script.install_methods) {
-          if (method.script && method.script.startsWith('ct/')) {
+          if (method.script?.startsWith('ct/')) {
             const fileName = method.script.split('/').pop();
             if (fileName) {
               const localPath = join(this.scriptsDirectory, 'ct', fileName);
@@ -166,9 +166,9 @@ export class ScriptDownloaderService {
       }
 
       // Compare CT script only if it exists locally
-      if (localFilesExist.ctExists && script.install_methods && script.install_methods.length > 0) {
+      if (localFilesExist.ctExists && script.install_methods?.length) {
         for (const method of script.install_methods) {
-          if (method.script && method.script.startsWith('ct/')) {
+          if (method.script?.startsWith('ct/')) {
             const fileName = method.script.split('/').pop();
             if (fileName) {
               const localPath = join(this.scriptsDirectory, 'ct', fileName);
@@ -187,10 +187,9 @@ export class ScriptDownloaderService {
                   hasDifferences = true;
                   differences.push(`ct/${fileName}`);
                 }
-              } catch (error) {
-                console.error(`Error comparing CT script ${fileName}:`, error);
-                // Don't add to differences if there's an error reading files
-              }
+          } catch {
+            // Don't add to differences if there's an error reading files
+          }
             }
           }
         }
@@ -215,8 +214,7 @@ export class ScriptDownloaderService {
             hasDifferences = true;
             differences.push(`install/${installScriptName}`);
           }
-        } catch (error) {
-          console.error(`Error comparing install script ${installScriptName}:`, error);
+        } catch {
           // Don't add to differences if there's an error reading files
         }
       }
@@ -240,8 +238,8 @@ export class ScriptDownloaderService {
           const localPath = join(this.scriptsDirectory, 'ct', fileName);
           try {
             localContent = await readFile(localPath, 'utf-8');
-          } catch (error) {
-            console.error('Error reading local CT script:', error);
+          } catch {
+            // Error reading local CT script
           }
 
           try {
@@ -251,8 +249,8 @@ export class ScriptDownloaderService {
               const downloadedContent = await this.downloadFileFromGitHub(method.script);
               remoteContent = this.modifyScriptContent(downloadedContent);
             }
-          } catch (error) {
-            console.error('Error downloading remote CT script:', error);
+          } catch {
+            // Error downloading remote CT script
           }
         }
       } else if (filePath.startsWith('install/')) {
@@ -260,14 +258,14 @@ export class ScriptDownloaderService {
         const localPath = join(this.scriptsDirectory, filePath);
         try {
           localContent = await readFile(localPath, 'utf-8');
-        } catch (error) {
-          console.error('Error reading local install script:', error);
+        } catch {
+          // Error reading local install script
         }
 
         try {
           remoteContent = await this.downloadFileFromGitHub(filePath);
-        } catch (error) {
-          console.error('Error downloading remote install script:', error);
+        } catch {
+          // Error downloading remote install script
         }
       }
 

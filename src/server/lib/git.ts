@@ -150,8 +150,8 @@ export class GitManager {
       return {
         isRepo: true,
         isBehind,
-        lastCommit: log.latest?.hash || undefined,
-        branch: status.current || undefined
+        lastCommit: log.latest?.hash ?? undefined,
+        branch: status.current ?? undefined
       };
     } catch (error) {
       console.error('Error getting repository status:', error);

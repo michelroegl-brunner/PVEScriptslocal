@@ -130,15 +130,12 @@ Open your browser and navigate to `http://IP:3000` (or your configured host/port
 
 ```
 PVESciptslocal/
-├── scripts/                    # Script collection
-│   ├── core/                  # Core utility functions
+├── scripts/                  # Script collection
+│   ├── core/                 # Core utility functions
 │   │   ├── build.func        # Build system functions
 │   │   ├── tools.func        # Tool installation functions
 │   │   └── create_lxc.sh     # LXC container creation
-│   ├── ct/                   # Container templates
-│   │   ├── 2fauth.sh         # 2FA authentication app
-│   │   ├── adguard.sh        # AdGuard Home
-│   │   └── debian.sh         # Debian base container
+│   ├── ct/                   # Container templates 
 │   └── install/              # Installation scripts
 ├── src/                      # Source code
 │   ├── app/                  # Next.js app directory
@@ -187,28 +184,8 @@ The application uses PostgreSQL with Prisma ORM. The database stores:
 npm install
 
 # Start development server
-npm run dev
+npm run dev:server
 
-# Start Next.js in development mode
-npm run dev:next
-
-# Type checking
-npm run typecheck
-
-# Linting
-npm run lint
-npm run lint:fix
-
-# Formatting
-npm run format:write
-npm run format:check
-
-# Database operations
-npm run db:generate    # Generate Prisma client
-npm run db:migrate     # Run migrations
-npm run db:push        # Push schema changes
-npm run db:studio      # Open Prisma Studio
-```
 
 ### Project Structure for Developers
 

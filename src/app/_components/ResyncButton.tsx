@@ -13,9 +13,9 @@ export function ResyncButton() {
       setIsResyncing(false);
       setLastSync(new Date());
       if (data.success) {
-        setSyncMessage(data.message || 'Scripts synced successfully');
+        setSyncMessage(data.message ?? 'Scripts synced successfully');
       } else {
-        setSyncMessage(data.error || 'Failed to sync scripts');
+        setSyncMessage(data.error ?? 'Failed to sync scripts');
       }
       // Clear message after 3 seconds
       setTimeout(() => setSyncMessage(null), 3000);

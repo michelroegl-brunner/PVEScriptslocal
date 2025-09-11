@@ -1,4 +1,4 @@
-import { readdir, stat } from 'fs/promises';
+import { readdir, stat, readFile } from 'fs/promises';
 import { join, resolve, extname } from 'path';
 import { env } from '~/env.js';
 import { spawn, type ChildProcess } from 'child_process';
@@ -95,8 +95,8 @@ export class ScriptManager {
             let logo: string | undefined;
             try {
               const scriptData = await localScriptsService.getScriptBySlug(slug);
-              logo = scriptData?.logo || undefined;
-            } catch (error) {
+              logo = scriptData?.logo ?? undefined;
+            } catch {
               // JSON file might not exist, that's okay
             }
             
@@ -245,7 +245,6 @@ export class ScriptManager {
       throw new Error(validation.message);
     }
 
-    const { readFile } = await import('fs/promises');
     return await readFile(scriptPath, 'utf-8');
   }
 

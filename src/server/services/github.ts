@@ -8,14 +8,14 @@ export class GitHubService {
   private jsonFolder: string;
 
   constructor() {
-    this.repoUrl = env.REPO_URL || "";
+    this.repoUrl = env.REPO_URL ?? "";
     this.branch = env.REPO_BRANCH;
     this.jsonFolder = env.JSON_FOLDER;
     
     // Only validate GitHub URL if it's provided
     if (this.repoUrl) {
       // Extract owner and repo from the URL
-      const urlMatch = this.repoUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+      const urlMatch = /github\.com\/([^\/]+)\/([^\/]+)/.exec(this.repoUrl);
       if (!urlMatch) {
         throw new Error(`Invalid GitHub repository URL: ${this.repoUrl}`);
       }
@@ -124,7 +124,7 @@ export class GitHubService {
   async getScriptBySlug(slug: string): Promise<Script | null> {
     try {
       const scripts = await this.getAllScripts();
-      return scripts.find(script => script.slug === slug) || null;
+      return scripts.find(script => script.slug === slug) ?? null;
     } catch (error) {
       console.error('Error fetching script by slug:', error);
       throw new Error(`Failed to fetch script: ${slug}`);

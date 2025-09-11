@@ -1,4 +1,4 @@
-import { WebSocketServer, type WebSocket } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'http';
 import { scriptManager } from '~/server/lib/scripts';
 
@@ -12,9 +12,9 @@ export class ScriptExecutionHandler {
   private wss: WebSocketServer;
   private activeExecutions: Map<string, { process: any; ws: WebSocket }> = new Map();
 
-  constructor(server: any) {
+  constructor(server: unknown) {
     this.wss = new WebSocketServer({ 
-      server,
+      server: server as any,
       path: '/ws/script-execution'
     });
 
@@ -25,8 +25,8 @@ export class ScriptExecutionHandler {
     
     ws.on('message', (data) => {
       try {
-        const message = JSON.parse(data.toString());
-        this.handleMessage(ws, message);
+        const message = JSON.parse(data.toString()) as { action: string; scriptPath?: string; executionId?: string };
+        void this.handleMessage(ws, message);
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
         this.sendMessage(ws, {
@@ -48,7 +48,7 @@ export class ScriptExecutionHandler {
     });
   }
 
-  private async handleMessage(ws: WebSocket, message: any) {
+  private async handleMessage(ws: WebSocket, message: { action: string; scriptPath?: string; executionId?: string }) {
     const { action, scriptPath, executionId } = message;
 
     switch (action) {
@@ -86,7 +86,7 @@ export class ScriptExecutionHandler {
       if (!validation.valid) {
         this.sendMessage(ws, {
           type: 'error',
-          data: validation.message || 'Invalid script path',
+          data: validation.message ?? 'Invalid script path',
           timestamp: Date.now()
         });
         return;
@@ -207,6 +207,6 @@ export class ScriptExecutionHandler {
 }
 
 // Export function to create handler
-export function createScriptExecutionHandler(server: any): ScriptExecutionHandler {
+export function createScriptExecutionHandler(server: unknown): ScriptExecutionHandler {
   return new ScriptExecutionHandler(server);
 }

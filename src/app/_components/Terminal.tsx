@@ -1,9 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
-import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 
 interface TerminalProps {
@@ -20,23 +17,34 @@ interface TerminalMessage {
 export function Terminal({ scriptPath, onClose }: TerminalProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   const terminalRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<XTerm | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
+  const xtermRef = useRef<any>(null);
+  const fitAddonRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [executionId] = useState(() => `exec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const isConnectingRef = useRef<boolean>(false);
   const hasConnectedRef = useRef<boolean>(false);
 
-  const scriptName = scriptPath.split('/').pop() || scriptPath.split('\\').pop() || 'Unknown Script';
+  const scriptName = scriptPath.split('/').pop() ?? scriptPath.split('\\').pop() ?? 'Unknown Script';
+
+  // Ensure we're on the client side
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
-    // Initialize xterm.js terminal with proper timing
-    if (!terminalRef.current || xtermRef.current) return;
+    // Only initialize on client side
+    if (!isClient || !terminalRef.current || xtermRef.current) return;
 
     // Use setTimeout to ensure DOM is fully ready
-    const initTerminal = () => {
+    const initTerminal = async () => {
       if (!terminalRef.current || xtermRef.current) return;
+
+      // Dynamically import xterm modules to avoid SSR issues
+      const { Terminal: XTerm } = await import('@xterm/xterm');
+      const { FitAddon } = await import('@xterm/addon-fit');
+      const { WebLinksAddon } = await import('@xterm/addon-web-links');
 
       const terminal = new XTerm({
         theme: {
@@ -97,7 +105,9 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
     };
 
     // Initialize with a small delay
-    const timeoutId = setTimeout(initTerminal, 50);
+    const timeoutId = setTimeout(() => {
+      void initTerminal();
+    }, 50);
 
     return () => {
       clearTimeout(timeoutId);
@@ -107,7 +117,7 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
         fitAddonRef.current = null;
       }
     };
-  }, []);
+  }, [executionId, isClient]);
 
   useEffect(() => {
     // Prevent multiple connections in React Strict Mode
@@ -147,14 +157,14 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
 
       ws.onmessage = (event) => {
         try {
-          const message: TerminalMessage = JSON.parse(event.data);
+          const message = JSON.parse(event.data as string) as TerminalMessage;
           handleMessage(message);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
         }
       };
 
-      ws.onclose = (event) => {
+      ws.onclose = (_event) => {
         setIsConnected(false);
         setIsRunning(false);
         isConnectingRef.current = false;
@@ -237,6 +247,29 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
       xtermRef.current.clear();
     }
   };
+
+  // Don't render on server side
+  if (!isClient) {
+    return (
+      <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+        <div className="bg-gray-800 px-4 py-2 flex items-center justify-between border-b border-gray-700">
+          <div className="flex items-center space-x-2">
+            <div className="flex space-x-1">
+              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            </div>
+            <span className="text-gray-300 font-mono text-sm ml-2">
+              {scriptName}
+            </span>
+          </div>
+        </div>
+        <div className="h-96 w-full flex items-center justify-center">
+          <div className="text-gray-400">Loading terminal...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">

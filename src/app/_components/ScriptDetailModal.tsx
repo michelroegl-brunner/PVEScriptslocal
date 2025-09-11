@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { api } from '~/trpc/react';
 import type { Script } from '~/types/script';
 import { DiffViewer } from './DiffViewer';
@@ -41,8 +42,8 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
         const message = 'message' in data ? data.message : 'Script loaded successfully';
         setLoadMessage(`✅ ${message}`);
         // Refetch script files status and comparison data to update the UI
-        refetchScriptFiles();
-        refetchComparison();
+        void refetchScriptFiles();
+        void refetchComparison();
       } else {
         const error = 'error' in data ? data.error : 'Failed to load script';
         setLoadMessage(`❌ ${error}`);
@@ -109,9 +110,11 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center space-x-4">
             {script.logo && !imageError ? (
-              <img
+              <Image
                 src={script.logo}
                 alt={`${script.name} logo`}
+                width={64}
+                height={64}
                 className="w-16 h-16 rounded-lg object-contain"
                 onError={handleImageError}
               />
@@ -428,7 +431,7 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
           )}
 
           {/* Default Credentials */}
-          {(script.default_credentials.username || script.default_credentials.password) && (
+          {(script.default_credentials.username ?? script.default_credentials.password) && (
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-3">Default Credentials</h3>
               <dl className="space-y-2">
@@ -503,7 +506,7 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
       {/* Text Viewer Modal */}
       {script && (
         <TextViewer
-          scriptName={script.install_methods?.find(method => method.script?.startsWith('ct/'))?.script?.split('/').pop() || `${script.slug}.sh`}
+          scriptName={script.install_methods?.find(method => method.script?.startsWith('ct/'))?.script?.split('/').pop() ?? `${script.slug}.sh`}
           isOpen={textViewerOpen}
           onClose={() => setTextViewerOpen(false)}
         />

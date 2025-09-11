@@ -74,7 +74,7 @@ export class LocalScriptsService {
   async getScriptBySlug(slug: string): Promise<Script | null> {
     try {
       const scripts = await this.getAllScripts();
-      return scripts.find(script => script.slug === slug) || null;
+      return scripts.find(script => script.slug === slug) ?? null;
     } catch (error) {
       console.error('Error fetching script by slug:', error);
       throw new Error(`Failed to fetch script: ${slug}`);

@@ -9,13 +9,34 @@ import { spawn as ptySpawn } from 'node-pty';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
-const port = process.env.PORT || 3000;
+const port = parseInt(process.env.PORT || '3000', 10);
 
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 // WebSocket handler for script execution
+/**
+ * @typedef {import('ws').WebSocket & {connectionTime?: number, clientIP?: string}} ExtendedWebSocket
+ */
+
+/**
+ * @typedef {Object} Execution
+ * @property {any} process
+ * @property {ExtendedWebSocket} ws
+ */
+
+/**
+ * @typedef {Object} WebSocketMessage
+ * @property {string} action
+ * @property {string} [scriptPath]
+ * @property {string} [executionId]
+ * @property {string} [input]
+ */
+
 class ScriptExecutionHandler {
+  /**
+   * @param {import('http').Server} server
+   */
   constructor(server) {
     this.wss = new WebSocketServer({ 
       server,
@@ -27,21 +48,15 @@ class ScriptExecutionHandler {
 
   setupWebSocket() {
     this.wss.on('connection', (ws, request) => {
-      console.log('New WebSocket connection for script execution');
-      console.log('Client IP:', request.socket.remoteAddress);
-      console.log('User-Agent:', request.headers['user-agent']);
-      console.log('WebSocket readyState:', ws.readyState);
-      console.log('Request URL:', request.url);
       
       // Set connection metadata
-      ws.connectionTime = Date.now();
-      ws.clientIP = request.socket.remoteAddress;
+      /** @type {ExtendedWebSocket} */ (ws).connectionTime = Date.now();
+      /** @type {ExtendedWebSocket} */ (ws).clientIP = request.socket.remoteAddress || 'unknown';
       
       ws.on('message', (data) => {
         try {
           const message = JSON.parse(data.toString());
-          console.log('Received message from client:', message);
-          this.handleMessage(ws, message);
+          this.handleMessage(/** @type {ExtendedWebSocket} */ (ws), message);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
           this.sendMessage(ws, {
@@ -53,17 +68,20 @@ class ScriptExecutionHandler {
       });
 
       ws.on('close', (code, reason) => {
-        console.log(`WebSocket connection closed: ${code} - ${reason}`);
-        this.cleanupActiveExecutions(ws);
+        this.cleanupActiveExecutions(/** @type {ExtendedWebSocket} */ (ws));
       });
 
       ws.on('error', (error) => {
         console.error('WebSocket error:', error);
-        this.cleanupActiveExecutions(ws);
+        this.cleanupActiveExecutions(/** @type {ExtendedWebSocket} */ (ws));
       });
     });
   }
 
+  /**
+   * @param {ExtendedWebSocket} ws
+   * @param {WebSocketMessage} message
+   */
   async handleMessage(ws, message) {
     const { action, scriptPath, executionId, input } = message;
 
@@ -101,19 +119,18 @@ class ScriptExecutionHandler {
     }
   }
 
+  /**
+   * @param {ExtendedWebSocket} ws
+   * @param {string} scriptPath
+   * @param {string} executionId
+   */
   async startScriptExecution(ws, scriptPath, executionId) {
     try {
-      console.log('Starting script execution...');
       // Basic validation
       const scriptsDir = join(process.cwd(), 'scripts');
       const resolvedPath = resolve(scriptPath);
       
-      console.log('Scripts directory:', scriptsDir);
-      console.log('Resolved path:', resolvedPath);
-      console.log('Is within scripts dir:', resolvedPath.startsWith(resolve(scriptsDir)));
-      
       if (!resolvedPath.startsWith(resolve(scriptsDir))) {
-        console.log('Script path validation failed');
         this.sendMessage(ws, {
           type: 'error',
           data: 'Script path is not within the allowed scripts directory',
@@ -169,10 +186,10 @@ class ScriptExecutionHandler {
       });
 
       // Handle process exit
-      childProcess.onExit((exitCode, signal) => {
+      childProcess.onExit((e) => {
         this.sendMessage(ws, {
           type: 'end',
-          data: `Script execution finished with code: ${exitCode}, signal: ${signal}`,
+          data: `Script execution finished with code: ${e.exitCode}, signal: ${e.signal}`,
           timestamp: Date.now()
         });
         
@@ -183,12 +200,15 @@ class ScriptExecutionHandler {
     } catch (error) {
       this.sendMessage(ws, {
         type: 'error',
-        data: `Failed to start script: ${error.message}`,
+        data: `Failed to start script: ${error instanceof Error ? error.message : String(error)}`,
         timestamp: Date.now()
       });
     }
   }
 
+  /**
+   * @param {string} executionId
+   */
   stopScriptExecution(executionId) {
     const execution = this.activeExecutions.get(executionId);
     if (execution) {
@@ -203,22 +223,30 @@ class ScriptExecutionHandler {
     }
   }
 
+  /**
+   * @param {string} executionId
+   * @param {string} input
+   */
   sendInputToProcess(executionId, input) {
     const execution = this.activeExecutions.get(executionId);
     if (execution && execution.process.write) {
-      console.log('Sending input to process:', JSON.stringify(input), 'Length:', input.length);
       execution.process.write(input);
-    } else {
-      console.log('No active execution found for input:', executionId);
     }
   }
 
+  /**
+   * @param {ExtendedWebSocket} ws
+   * @param {any} message
+   */
   sendMessage(ws, message) {
     if (ws.readyState === 1) { // WebSocket.OPEN
       ws.send(JSON.stringify(message));
     }
   }
 
+  /**
+   * @param {ExtendedWebSocket} ws
+   */
   cleanupActiveExecutions(ws) {
     for (const [executionId, execution] of this.activeExecutions.entries()) {
       if (execution.ws === ws) {
@@ -236,7 +264,7 @@ app.prepare().then(() => {
     try {
       // Be sure to pass `true` as the second argument to `url.parse`.
       // This tells it to parse the query portion of the URL.
-      const parsedUrl = parse(req.url, true);
+      const parsedUrl = parse(req.url || '', true);
       const { pathname, query } = parsedUrl;
 
       if (pathname === '/ws/script-execution') {
@@ -244,6 +272,7 @@ app.prepare().then(() => {
         return;
       }
 
+      // Let Next.js handle all other requests including HMR
       await handle(req, res, parsedUrl);
     } catch (err) {
       console.error('Error occurred handling', req.url, err);

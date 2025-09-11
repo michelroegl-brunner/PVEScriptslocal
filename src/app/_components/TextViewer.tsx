@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -24,13 +24,7 @@ export function TextViewer({ scriptName, isOpen, onClose }: TextViewerProps) {
   // Extract slug from script name (remove .sh extension)
   const slug = scriptName.replace(/\.sh$/, '');
 
-  useEffect(() => {
-    if (isOpen && scriptName) {
-      loadScriptContent();
-    }
-  }, [isOpen, scriptName]);
-
-  const loadScriptContent = async () => {
+  const loadScriptContent = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     
@@ -43,14 +37,14 @@ export function TextViewer({ scriptName, isOpen, onClose }: TextViewerProps) {
       const content: ScriptContent = {};
 
       if (ctResponse.status === 'fulfilled' && ctResponse.value.ok) {
-        const ctData = await ctResponse.value.json();
+        const ctData = await ctResponse.value.json() as { result?: { data?: { json?: { success?: boolean; content?: string } } } };
         if (ctData.result?.data?.json?.success) {
           content.ctScript = ctData.result.data.json.content;
         }
       }
 
       if (installResponse.status === 'fulfilled' && installResponse.value.ok) {
-        const installData = await installResponse.value.json();
+        const installData = await installResponse.value.json() as { result?: { data?: { json?: { success?: boolean; content?: string } } } };
         if (installData.result?.data?.json?.success) {
           content.installScript = installData.result.data.json.content;
         }
@@ -62,7 +56,13 @@ export function TextViewer({ scriptName, isOpen, onClose }: TextViewerProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [scriptName, slug]);
+
+  useEffect(() => {
+    if (isOpen && scriptName) {
+      void loadScriptContent();
+    }
+  }, [isOpen, scriptName, loadScriptContent]);
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {

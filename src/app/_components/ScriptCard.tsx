@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import type { ScriptCard } from '~/types/script';
 
 interface ScriptCardProps {
@@ -25,9 +26,11 @@ export function ScriptCard({ script, onClick }: ScriptCardProps) {
         <div className="flex items-start space-x-4 mb-4">
           <div className="flex-shrink-0">
             {script.logo && !imageError ? (
-              <img
+              <Image
                 src={script.logo}
                 alt={`${script.name} logo`}
+                width={48}
+                height={48}
                 className="w-12 h-12 rounded-lg object-contain"
                 onError={handleImageError}
               />

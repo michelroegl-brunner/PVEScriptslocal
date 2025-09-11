@@ -34,11 +34,11 @@ export function DiffViewer({ scriptSlug, filePath, isOpen, onClose }: DiffViewer
   if (!isOpen) return null;
 
   const renderDiffLine = (line: string, index: number) => {
-    const lineNumber = line.match(/^([+-]?\d+):/)?.[1];
+    const lineNumberMatch = /^([+-]?\d+):/.exec(line);
+    const lineNumber = lineNumberMatch?.[1];
     const content = line.replace(/^[+-]?\d+:\s*/, '');
     const isAdded = line.startsWith('+');
     const isRemoved = line.startsWith('-');
-    const isContext = line.startsWith(' ');
 
     return (
       <div

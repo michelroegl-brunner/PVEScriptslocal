@@ -24,14 +24,14 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
 
   // Get GitHub scripts with download status
   const combinedScripts = React.useMemo(() => {
-    const githubScripts = scriptCardsData?.success ? scriptCardsData.cards
-      .filter(script => script && script.name) // Filter out invalid scripts
-      .map(script => ({
+    const githubScripts = scriptCardsData?.success ? (scriptCardsData.cards
+      ?.filter(script => script?.name) // Filter out invalid scripts
+      ?.map(script => ({
         ...script,
         source: 'github' as const,
         isDownloaded: false, // Will be updated by status check
         isUpToDate: false,   // Will be updated by status check
-      })) : [];
+      })) ?? []) : [];
 
     return githubScripts;
   }, [scriptCardsData]);
@@ -40,16 +40,16 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
   // Update scripts with download status
   const scriptsWithStatus = React.useMemo(() => {
     return combinedScripts.map(script => {
-      if (!script || !script.name) {
+      if (!script?.name) {
         return script; // Return as-is if invalid
       }
       
       // Check if there's a corresponding local script
       const hasLocalVersion = localScriptsData?.scripts?.some(local => {
-        if (!local || !local.name) return false;
+        if (!local?.name) return false;
         const localName = local.name.replace(/\.sh$/, '');
         return localName.toLowerCase() === script.name.toLowerCase() || 
-               localName.toLowerCase() === (script.slug || '').toLowerCase();
+               localName.toLowerCase() === (script.slug ?? '').toLowerCase();
       }) ?? false;
       
       return {
@@ -62,7 +62,7 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
 
   // Filter scripts based on search query (name and slug only)
   const filteredScripts = React.useMemo(() => {
-    if (!searchQuery || !searchQuery.trim()) {
+    if (!searchQuery?.trim()) {
       return scriptsWithStatus;
     }
 
@@ -79,8 +79,8 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
         return false;
       }
 
-      const name = (script.name || '').toLowerCase();
-      const slug = (script.slug || '').toLowerCase();
+      const name = (script.name ?? '').toLowerCase();
+      const slug = (script.slug ?? '').toLowerCase();
 
       const matches = name.includes(query) || slug.includes(query);
 
@@ -91,7 +91,7 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
   }, [scriptsWithStatus, searchQuery]);
 
 
-  const handleCardClick = (scriptCard: any) => {
+  const handleCardClick = (scriptCard: { slug: string }) => {
     // All scripts are GitHub scripts, open modal
     setSelectedSlug(scriptCard.slug);
     setIsModalOpen(true);
@@ -120,7 +120,7 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
           </svg>
           <p className="text-lg font-medium">Failed to load scripts</p>
           <p className="text-sm text-gray-500 mt-1">
-            {githubError?.message || localError?.message || 'Unknown error occurred'}
+            {githubError?.message ?? localError?.message ?? 'Unknown error occurred'}
           </p>
         </div>
         <button
@@ -180,9 +180,9 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
         {searchQuery && (
           <div className="text-center mt-2 text-sm text-gray-600">
             {filteredScripts.length === 0 ? (
-              <span>No scripts found matching "{searchQuery}"</span>
+              <span>No scripts found matching &quot;{searchQuery}&quot;</span>
             ) : (
-              <span>Found {filteredScripts.length} script{filteredScripts.length !== 1 ? 's' : ''} matching "{searchQuery}"</span>
+              <span>Found {filteredScripts.length} script{filteredScripts.length !== 1 ? 's' : ''} matching &quot;{searchQuery}&quot;</span>
             )}
           </div>
         )}
@@ -217,7 +217,7 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
           
           return (
             <ScriptCard
-              key={script.slug || `script-${index}`}
+              key={script.slug ?? `script-${index}`}
               script={script}
               onClick={handleCardClick}
             />
