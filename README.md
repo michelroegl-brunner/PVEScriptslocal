@@ -155,7 +155,7 @@ PVESciptslocal/
 ### Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+|----------|-------------|---------|np,
 | `REPO_URL` | GitHub repository URL | Required |
 | `REPO_BRANCH` | Git branch to use | `main` |
 | `SCRIPTS_DIRECTORY` | Local scripts directory | `scripts/ct` |
