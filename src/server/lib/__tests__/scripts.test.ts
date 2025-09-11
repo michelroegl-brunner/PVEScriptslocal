@@ -169,7 +169,7 @@ describe('ScriptManager', () => {
         logo: 'test-logo.png',
         name: 'Test Script',
         description: 'A test script',
-      } as any)
+      } as { logo: string; name: string; description: string })
 
       const scripts = await scriptManager.getCtScripts()
 
@@ -280,7 +280,7 @@ describe('ScriptManager', () => {
       }
       mockSpawn.mockReturnValue(mockChildProcess as any)
 
-      const childProcess = await scriptManager.executeScript('/test/scripts/script.py')
+      await scriptManager.executeScript('/test/scripts/script.py')
 
       expect(mockSpawn).toHaveBeenCalledWith('python', ['/test/scripts/script.py'], {
         cwd: '/test/scripts',

@@ -34,7 +34,7 @@ vi.mock('../ScriptDetailModal', () => ({
     isOpen ? (
       <div data-testid="script-detail-modal">
         <button onClick={onClose}>Close</button>
-        <button onClick={() => onInstallScript?.('/test/path', 'test-script')}>Install</button>
+        <button onClick={() => { onInstallScript?.('/test/path', 'test-script') }}>Install</button>
       </div>
     ) : null,
 }))
