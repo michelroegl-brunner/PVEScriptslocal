@@ -972,7 +972,7 @@ install_script() {
       header_info
       echo -e "${INFO}${HOLD} ${GN}Using Config File on node $PVEHOST_NAME${CL}"
       METHOD="config_file"
-      source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/config-file.func)
+      source "$(dirname "${BASH_SOURCE[0]}")/config-file.func"
       config_file
       break
       ;;
@@ -1046,7 +1046,7 @@ start() {
   source "$(dirname "${BASH_SOURCE[0]}")/tools.func"
   if command -v pveversion >/dev/null 2>&1; then
     install_script
-    echo "TEST!!!"
+    
   else
     CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "${APP} LXC Update/Setting" --menu \
       "Support/Update functions for ${APP} LXC. Choose an option:" \
@@ -1076,7 +1076,7 @@ start() {
 
 # This function collects user settings and integrates all the collected information.
 build_container() {
-  echo "TEST"
+  
   #  if [ "$VERBOSE" == "yes" ]; then set -x; fi
 
   NET_STRING="-net0 name=eth0,bridge=$BRG$MAC,ip=$NET$GATE$VLAN$MTU"
@@ -1106,9 +1106,9 @@ build_container() {
   TEMP_DIR=$(mktemp -d)
   pushd "$TEMP_DIR" >/dev/null
   if [ "$var_os" == "alpine" ]; then
-    export FUNCTIONS_FILE_PATH="$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/alpine-install.func)"
+    export FUNCTIONS_FILE_PATH="$(cat "$(dirname "${BASH_SOURCE[0]}")/core.func" && echo && cat "$(dirname "${BASH_SOURCE[0]}")/tools.func" && echo && cat "$(dirname "${BASH_SOURCE[0]}")/alpine-install.func")"
   else
-    export FUNCTIONS_FILE_PATH="$(dirname "${BASH_SOURCE[0]}")/install.func"
+    export FUNCTIONS_FILE_PATH="$(cat "$(dirname "${BASH_SOURCE[0]}")/core.func" && echo && cat "$(dirname "${BASH_SOURCE[0]}")/tools.func" && echo && cat "$(dirname "${BASH_SOURCE[0]}")/install.func")"
   fi
 
   export DIAGNOSTICS="$DIAGNOSTICS"
@@ -1336,9 +1336,8 @@ EOF'
   fi
   msg_ok "Customized LXC Container"
 
-  # Copy the install script into the container and execute it
-  pct push "$CTID" "$(dirname "${BASH_SOURCE[0]}")/../install/${var_install}.sh" "/tmp/${var_install}.sh"
-  lxc-attach -n "$CTID" -- bash "/tmp/${var_install}.sh"
+  
+  lxc-attach -n "$CTID" -- bash -c "$(cat "$(dirname "${BASH_SOURCE[0]}")/../install/${var_install}.sh")"
 }
 
 # This function sets the description of the container.

@@ -8,7 +8,7 @@ if ! command -v curl >/dev/null 2>&1; then
   apt-get update >/dev/null 2>&1
   apt-get install -y curl >/dev/null 2>&1
 fi
-source "$(dirname "${BASH_SOURCE[0]}")/core.func"
+# core.func is included in FUNCTIONS_FILE_PATH
 load_functions
 # This function enables IPv6 if it's not disabled and sets verbose mode
 verb_ip6() {
@@ -145,7 +145,7 @@ EOF
   rm -rf /usr/lib/python3.*/EXTERNALLY-MANAGED
   msg_ok "Updated Container OS"
 
-  source "$(dirname "${BASH_SOURCE[0]}")/tools.func")
+  # tools.func is included in FUNCTIONS_FILE_PATH
 }
 
 # This function modifies the message of the day (motd) and SSH settings
