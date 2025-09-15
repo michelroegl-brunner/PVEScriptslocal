@@ -80,7 +80,7 @@ export class LocalScriptsService {
       try {
         const content = await readFile(filePath, 'utf-8');
         return JSON.parse(content) as Script;
-      } catch (fileError) {
+      } catch {
         // If file doesn't exist, return null instead of throwing
         return null;
       }

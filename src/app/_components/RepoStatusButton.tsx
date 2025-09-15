@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { api } from '~/trpc/react';
 
 export function RepoStatusButton() {
@@ -23,7 +23,7 @@ export function RepoStatusButton() {
       if (data.success) {
         // Refetch status after successful update
         setTimeout(() => {
-          refetchStatus();
+          void refetchStatus();
         }, 1000);
         
         // Clear message after 5 seconds for success
@@ -90,7 +90,7 @@ export function RepoStatusButton() {
               </div>
               {repoStatus?.isRepo && (
                 <div className="text-sm text-gray-500">
-                  Branch: {repoStatus.branch || 'unknown'} | 
+                  Branch: {repoStatus.branch ?? 'unknown'} | 
                   Last commit: {repoStatus.lastCommit ? repoStatus.lastCommit.substring(0, 8) : 'unknown'}
                 </div>
               )}

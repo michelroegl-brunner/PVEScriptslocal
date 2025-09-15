@@ -141,7 +141,7 @@ export class GitHubJsonService {
       try {
         const script = await this.downloadJsonFile(`${this.jsonFolder}/${slug}.json`);
         return script;
-      } catch (error) {
+      } catch {
         console.log(`Script ${slug} not found in repository`);
         return null;
       }

@@ -102,7 +102,7 @@ export class GitManager {
       // Step 2: npm install
       steps.push('📦 Installing/updating dependencies...');
       try {
-        const { stdout, stderr } = await execAsync('npm install', { cwd: this.repoPath });
+        const { stderr } = await execAsync('npm install', { cwd: this.repoPath });
         if (stderr && !stderr.includes('npm WARN')) {
           console.warn('npm install warnings:', stderr);
         }
@@ -120,7 +120,7 @@ export class GitManager {
       // Step 3: Build the application
       steps.push('🔨 Building application...');
       try {
-        const { stdout, stderr } = await execAsync('npm run build', { cwd: this.repoPath });
+        const { stderr } = await execAsync('npm run build', { cwd: this.repoPath });
         if (stderr && !stderr.includes('npm WARN')) {
           console.warn('npm build warnings:', stderr);
         }
