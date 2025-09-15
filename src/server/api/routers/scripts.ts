@@ -283,5 +283,55 @@ export const scriptsRouter = createTRPCRouter({
           diff: null
         };
       }
+    }),
+
+  // Check if running on Proxmox VE host
+  checkProxmoxVE: publicProcedure
+    .query(async () => {
+      try {
+        const { spawn } = await import('child_process');
+        
+        return new Promise((resolve) => {
+          const child = spawn('command', ['-v', 'pveversion'], {
+            stdio: ['pipe', 'pipe', 'pipe'],
+            shell: true
+          });
+
+
+          child.on('close', (code) => {
+            // If command exits with code 0, pveversion command exists
+            if (code === 0) {
+              resolve({
+                success: true,
+                isProxmoxVE: true,
+                message: 'Running on Proxmox VE host'
+              });
+            } else {
+              resolve({
+                success: true,
+                isProxmoxVE: false,
+                message: 'Not running on Proxmox VE host'
+              });
+            }
+          });
+
+          child.on('error', (error) => {
+            resolve({
+              success: false,
+              isProxmoxVE: false,
+              error: error.message,
+              message: 'Failed to check Proxmox VE status'
+            });
+          });
+        });
+      } catch (error) {
+        console.error('Error in checkProxmoxVE:', error);
+        return {
+          success: false,
+          isProxmoxVE: false,
+          error: error instanceof Error ? error.message : 'Failed to check Proxmox VE status',
+          message: 'Failed to check Proxmox VE status'
+        };
+      }
     })
 });

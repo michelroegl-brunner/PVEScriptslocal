@@ -83,38 +83,56 @@ export class ScriptDownloaderService {
               
               // Determine target directory based on script path
               let targetDir: string;
+              let finalTargetDir: string;
               let filePath: string;
               
               if (scriptPath.startsWith('ct/')) {
                 targetDir = 'ct';
+                finalTargetDir = targetDir;
                 // Modify the content for CT scripts
                 const modifiedContent = this.modifyScriptContent(content);
                 filePath = join(this.scriptsDirectory!, targetDir, fileName);
                 await writeFile(filePath, modifiedContent, 'utf-8');
               } else if (scriptPath.startsWith('tools/')) {
                 targetDir = 'tools';
-                // Don't modify content for tools scripts
-                filePath = join(this.scriptsDirectory!, targetDir, fileName);
+                // Preserve subdirectory structure for tools scripts
+                const subPath = scriptPath.replace('tools/', '');
+                const subDir = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+                finalTargetDir = subDir ? join(targetDir, subDir) : targetDir;
+                // Ensure the subdirectory exists
+                await this.ensureDirectoryExists(join(this.scriptsDirectory!, finalTargetDir));
+                filePath = join(this.scriptsDirectory!, finalTargetDir, fileName);
                 await writeFile(filePath, content, 'utf-8');
               } else if (scriptPath.startsWith('vm/')) {
                 targetDir = 'vm';
-                // Don't modify content for VM scripts
-                filePath = join(this.scriptsDirectory!, targetDir, fileName);
+                // Preserve subdirectory structure for VM scripts
+                const subPath = scriptPath.replace('vm/', '');
+                const subDir = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+                finalTargetDir = subDir ? join(targetDir, subDir) : targetDir;
+                // Ensure the subdirectory exists
+                await this.ensureDirectoryExists(join(this.scriptsDirectory!, finalTargetDir));
+                filePath = join(this.scriptsDirectory!, finalTargetDir, fileName);
                 await writeFile(filePath, content, 'utf-8');
               } else if (scriptPath.startsWith('vw/')) {
                 targetDir = 'vw';
-                // Don't modify content for VW scripts
-                filePath = join(this.scriptsDirectory!, targetDir, fileName);
+                // Preserve subdirectory structure for VW scripts
+                const subPath = scriptPath.replace('vw/', '');
+                const subDir = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+                finalTargetDir = subDir ? join(targetDir, subDir) : targetDir;
+                // Ensure the subdirectory exists
+                await this.ensureDirectoryExists(join(this.scriptsDirectory!, finalTargetDir));
+                filePath = join(this.scriptsDirectory!, finalTargetDir, fileName);
                 await writeFile(filePath, content, 'utf-8');
               } else {
                 // Handle other script types (fallback to ct directory)
                 targetDir = 'ct';
+                finalTargetDir = targetDir;
                 const modifiedContent = this.modifyScriptContent(content);
                 filePath = join(this.scriptsDirectory!, targetDir, fileName);
                 await writeFile(filePath, modifiedContent, 'utf-8');
               }
               
-              files.push(`${targetDir}/${fileName}`);
+              files.push(`${finalTargetDir}/${fileName}`);
             }
           }
         }
@@ -179,31 +197,43 @@ export class ScriptDownloaderService {
                 }
               } else if (scriptPath.startsWith('tools/')) {
                 targetDir = 'tools';
-                localPath = join(this.scriptsDirectory!, targetDir, fileName);
+                // Preserve subdirectory structure for tools scripts
+                const subPath = scriptPath.replace('tools/', '');
+                const subDir = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+                const finalTargetDir = subDir ? join(targetDir, subDir) : targetDir;
+                localPath = join(this.scriptsDirectory!, finalTargetDir, fileName);
                 try {
                   await readFile(localPath, 'utf-8');
                   ctExists = true; // Use ctExists for tools scripts too for UI consistency
-                  files.push(`${targetDir}/${fileName}`);
+                  files.push(`${finalTargetDir}/${fileName}`);
                 } catch {
                   // File doesn't exist
                 }
               } else if (scriptPath.startsWith('vm/')) {
                 targetDir = 'vm';
-                localPath = join(this.scriptsDirectory!, targetDir, fileName);
+                // Preserve subdirectory structure for VM scripts
+                const subPath = scriptPath.replace('vm/', '');
+                const subDir = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+                const finalTargetDir = subDir ? join(targetDir, subDir) : targetDir;
+                localPath = join(this.scriptsDirectory!, finalTargetDir, fileName);
                 try {
                   await readFile(localPath, 'utf-8');
                   ctExists = true; // Use ctExists for VM scripts too for UI consistency
-                  files.push(`${targetDir}/${fileName}`);
+                  files.push(`${finalTargetDir}/${fileName}`);
                 } catch {
                   // File doesn't exist
                 }
               } else if (scriptPath.startsWith('vw/')) {
                 targetDir = 'vw';
-                localPath = join(this.scriptsDirectory!, targetDir, fileName);
+                // Preserve subdirectory structure for VW scripts
+                const subPath = scriptPath.replace('vw/', '');
+                const subDir = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+                const finalTargetDir = subDir ? join(targetDir, subDir) : targetDir;
+                localPath = join(this.scriptsDirectory!, finalTargetDir, fileName);
                 try {
                   await readFile(localPath, 'utf-8');
                   ctExists = true; // Use ctExists for VW scripts too for UI consistency
-                  files.push(`${targetDir}/${fileName}`);
+                  files.push(`${finalTargetDir}/${fileName}`);
                 } catch {
                   // File doesn't exist
                 }
@@ -260,21 +290,35 @@ export class ScriptDownloaderService {
             
             if (fileName) {
               let targetDir: string;
+              let finalTargetDir: string;
               
               if (scriptPath.startsWith('ct/')) {
                 targetDir = 'ct';
+                finalTargetDir = targetDir;
               } else if (scriptPath.startsWith('tools/')) {
                 targetDir = 'tools';
+                // Preserve subdirectory structure for tools scripts
+                const subPath = scriptPath.replace('tools/', '');
+                const subDir = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+                finalTargetDir = subDir ? join(targetDir, subDir) : targetDir;
               } else if (scriptPath.startsWith('vm/')) {
                 targetDir = 'vm';
+                // Preserve subdirectory structure for VM scripts
+                const subPath = scriptPath.replace('vm/', '');
+                const subDir = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+                finalTargetDir = subDir ? join(targetDir, subDir) : targetDir;
               } else if (scriptPath.startsWith('vw/')) {
                 targetDir = 'vw';
+                // Preserve subdirectory structure for VW scripts
+                const subPath = scriptPath.replace('vw/', '');
+                const subDir = subPath.includes('/') ? subPath.substring(0, subPath.lastIndexOf('/')) : '';
+                finalTargetDir = subDir ? join(targetDir, subDir) : targetDir;
               } else {
                 continue; // Skip unknown script types
               }
               
               comparisonPromises.push(
-                this.compareSingleFile(scriptPath, `${targetDir}/${fileName}`)
+                this.compareSingleFile(scriptPath, `${finalTargetDir}/${fileName}`)
                   .then(result => {
                     if (result.hasDifferences) {
                       hasDifferences = true;

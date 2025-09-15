@@ -87,14 +87,14 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
       const scriptPath = `scripts/${scriptMethod.script}`;
       const scriptName = script.name;
       onInstallScript(scriptPath, scriptName);
+      
+      // Scroll to top of the page to see the terminal
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      
       onClose(); // Close the modal when starting installation
     }
   };
 
-  const handleShowDiff = (filePath: string) => {
-    setSelectedDiffFile(filePath);
-    setDiffViewerOpen(true);
-  };
 
   const handleViewScript = () => {
     setTextViewerOpen(true);
@@ -279,53 +279,46 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
           </div>
         )}
         
-        {scriptFilesData?.success && !scriptFilesLoading && (
-          <div className="mx-6 mb-4 p-3 rounded-lg bg-gray-50 text-sm">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${scriptFilesData.ctExists ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                <span>CT Script: {scriptFilesData.ctExists ? 'Available' : 'Not loaded'}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${scriptFilesData.installExists ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-                <span>Install Script: {scriptFilesData.installExists ? 'Available' : 'Not loaded'}</span>
-              </div>
-              {scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists) && comparisonData?.success && !comparisonLoading && (
+        {scriptFilesData?.success && !scriptFilesLoading && (() => {
+          // Determine script type from the first install method
+          const firstScript = script?.install_methods?.[0]?.script;
+          let scriptType = 'Script';
+          if (firstScript?.startsWith('ct/')) {
+            scriptType = 'CT Script';
+          } else if (firstScript?.startsWith('tools/')) {
+            scriptType = 'Tools Script';
+          } else if (firstScript?.startsWith('vm/')) {
+            scriptType = 'VM Script';
+          } else if (firstScript?.startsWith('vw/')) {
+            scriptType = 'VW Script';
+          }
+
+          return (
+            <div className="mx-6 mb-4 p-3 rounded-lg bg-gray-50 text-sm">
+              <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
-                  <div className={`w-2 h-2 rounded-full ${comparisonData.hasDifferences ? 'bg-orange-500' : 'bg-green-500'}`}></div>
-                  <span>Status: {comparisonData.hasDifferences ? 'Update available' : 'Up to date'}</span>
+                  <div className={`w-2 h-2 rounded-full ${scriptFilesData.ctExists ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                  <span>{scriptType}: {scriptFilesData.ctExists ? 'Available' : 'Not loaded'}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-2 h-2 rounded-full ${scriptFilesData.installExists ? 'bg-green-500' : 'bg-gray-300'}`}></div>
+                  <span>Install Script: {scriptFilesData.installExists ? 'Available' : 'Not loaded'}</span>
+                </div>
+                {scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists) && comparisonData?.success && !comparisonLoading && (
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${comparisonData.hasDifferences ? 'bg-orange-500' : 'bg-green-500'}`}></div>
+                    <span>Status: {comparisonData.hasDifferences ? 'Update available' : 'Up to date'}</span>
+                  </div>
+                )}
+              </div>
+              {scriptFilesData.files.length > 0 && (
+                <div className="mt-2 text-xs text-gray-600">
+                  Files: {scriptFilesData.files.join(', ')}
                 </div>
               )}
             </div>
-            {scriptFilesData.files.length > 0 && (
-              <div className="mt-2 text-xs text-gray-600">
-                Files: {scriptFilesData.files.join(', ')}
-              </div>
-            )}
-            {scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists) && 
-             comparisonData?.success && comparisonData.hasDifferences && comparisonData.differences.length > 0 && (
-              <div className="mt-2">
-                <div className="text-xs text-orange-600 mb-2">
-                  Differences in: {comparisonData.differences.join(', ')}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {comparisonData.differences.map((filePath, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleShowDiff(filePath)}
-                      className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors flex items-center space-x-1"
-                    >
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <span>Show Diff: {filePath}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* Content */}
         <div className="p-6 space-y-6">

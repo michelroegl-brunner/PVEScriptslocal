@@ -31,6 +31,13 @@ vi.mock('~/trpc/react', () => ({
           data: null,
         })),
       },
+      checkProxmoxVE: {
+        useQuery: vi.fn(() => ({
+          data: { success: true, isProxmoxVE: true },
+          isLoading: false,
+          error: null,
+        })),
+      },
       fullUpdateRepo: {
         useMutation: vi.fn(() => ({
           mutate: vi.fn(),
