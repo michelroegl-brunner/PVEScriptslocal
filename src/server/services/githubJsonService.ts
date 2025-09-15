@@ -9,6 +9,7 @@ export class GitHubJsonService {
   private branch: string;
   private jsonFolder: string;
   private localJsonDirectory: string;
+  private scriptCache: Map<string, Script> = new Map();
 
   constructor() {
     this.repoUrl = env.REPO_URL ?? "";
@@ -130,11 +131,46 @@ export class GitHubJsonService {
 
   async getScriptBySlug(slug: string): Promise<Script | null> {
     try {
-      const scripts = await this.getAllScripts();
-      return scripts.find(script => script.slug === slug) ?? null;
+      // Try to get from local cache first
+      const localScript = await this.getScriptFromLocal(slug);
+      if (localScript) {
+        return localScript;
+      }
+
+      // If not found locally, try to download just this specific script
+      try {
+        const script = await this.downloadJsonFile(`${this.jsonFolder}/${slug}.json`);
+        return script;
+      } catch (error) {
+        console.log(`Script ${slug} not found in repository`);
+        return null;
+      }
     } catch (error) {
       console.error('Error fetching script by slug:', error);
       throw new Error(`Failed to fetch script: ${slug}`);
+    }
+  }
+
+  private async getScriptFromLocal(slug: string): Promise<Script | null> {
+    try {
+      // Check cache first
+      if (this.scriptCache.has(slug)) {
+        return this.scriptCache.get(slug)!;
+      }
+
+      const { readFile } = await import('fs/promises');
+      const { join } = await import('path');
+      
+      const filePath = join(this.localJsonDirectory, `${slug}.json`);
+      const content = await readFile(filePath, 'utf-8');
+      const script = JSON.parse(content) as Script;
+      
+      // Cache the script
+      this.scriptCache.set(slug, script);
+      
+      return script;
+    } catch {
+      return null;
     }
   }
 

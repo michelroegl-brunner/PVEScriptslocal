@@ -23,15 +23,15 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
   const [textViewerOpen, setTextViewerOpen] = useState(false);
 
   // Check if script files exist locally
-  const { data: scriptFilesData, refetch: refetchScriptFiles } = api.scripts.checkScriptFiles.useQuery(
+  const { data: scriptFilesData, refetch: refetchScriptFiles, isLoading: scriptFilesLoading } = api.scripts.checkScriptFiles.useQuery(
     { slug: script?.slug ?? '' },
     { enabled: !!script && isOpen }
   );
 
-  // Compare local and remote script content
-  const { data: comparisonData, refetch: refetchComparison } = api.scripts.compareScriptContent.useQuery(
+  // Compare local and remote script content (run in parallel, not dependent on scriptFilesData)
+  const { data: comparisonData, refetch: refetchComparison, isLoading: comparisonLoading } = api.scripts.compareScriptContent.useQuery(
     { slug: script?.slug ?? '' },
-    { enabled: !!script && isOpen && scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists) }
+    { enabled: !!script && isOpen }
   );
 
   // Load script mutation
@@ -81,10 +81,10 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
   const handleInstallScript = () => {
     if (!script || !onInstallScript) return;
     
-    // Find the CT script path
-    const ctScript = script.install_methods?.find(method => method.script?.startsWith('ct/'));
-    if (ctScript?.script) {
-      const scriptPath = `scripts/${ctScript.script}`;
+    // Find the script path (CT or tools)
+    const scriptMethod = script.install_methods?.find(method => method.script);
+    if (scriptMethod?.script) {
+      const scriptPath = `scripts/${scriptMethod.script}`;
       const scriptName = script.name;
       onInstallScript(scriptPath, scriptName);
       onClose(); // Close the modal when starting installation
@@ -270,7 +270,16 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
         )}
 
         {/* Script Files Status */}
-        {scriptFilesData?.success && (
+        {(scriptFilesLoading || comparisonLoading) && (
+          <div className="mx-6 mb-4 p-3 rounded-lg bg-blue-50 text-sm">
+            <div className="flex items-center space-x-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span>Loading script status...</span>
+            </div>
+          </div>
+        )}
+        
+        {scriptFilesData?.success && !scriptFilesLoading && (
           <div className="mx-6 mb-4 p-3 rounded-lg bg-gray-50 text-sm">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
@@ -281,7 +290,7 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
                 <div className={`w-2 h-2 rounded-full ${scriptFilesData.installExists ? 'bg-green-500' : 'bg-gray-300'}`}></div>
                 <span>Install Script: {scriptFilesData.installExists ? 'Available' : 'Not loaded'}</span>
               </div>
-              {scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists) && comparisonData?.success && (
+              {scriptFilesData?.success && (scriptFilesData.ctExists || scriptFilesData.installExists) && comparisonData?.success && !comparisonLoading && (
                 <div className="flex items-center space-x-2">
                   <div className={`w-2 h-2 rounded-full ${comparisonData.hasDifferences ? 'bg-orange-500' : 'bg-green-500'}`}></div>
                   <span>Status: {comparisonData.hasDifferences ? 'Update available' : 'Up to date'}</span>

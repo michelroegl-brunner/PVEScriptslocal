@@ -41,6 +41,13 @@ export const scriptsRouter = createTRPCRouter({
       return result;
     }),
 
+  // Full update repository (git pull, npm install, build)
+  fullUpdateRepo: publicProcedure
+    .mutation(async () => {
+      const result = await gitManager.fullUpdate();
+      return result;
+    }),
+
   // Get script content for viewing
   getScriptContent: publicProcedure
     .input(z.object({ path: z.string() }))
