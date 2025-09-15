@@ -16,38 +16,45 @@ export interface ScriptInfo {
 }
 
 export class ScriptManager {
-  private scriptsDir: string;
-  private allowedExtensions: string[];
-  private allowedPaths: string[];
-  private maxExecutionTime: number;
+  private scriptsDir: string | null = null;
+  private allowedExtensions: string[] | null = null;
+  private allowedPaths: string[] | null = null;
+  private maxExecutionTime: number | null = null;
 
   constructor() {
-    // Handle both absolute and relative paths for testing
-    this.scriptsDir = env.SCRIPTS_DIRECTORY.startsWith('/') 
-      ? env.SCRIPTS_DIRECTORY 
-      : join(process.cwd(), env.SCRIPTS_DIRECTORY);
-    this.allowedExtensions = env.ALLOWED_SCRIPT_EXTENSIONS.split(',').map(ext => ext.trim());
-    this.allowedPaths = env.ALLOWED_SCRIPT_PATHS.split(',').map(path => path.trim());
-    this.maxExecutionTime = parseInt(env.MAX_SCRIPT_EXECUTION_TIME, 10);
+    // Initialize lazily to avoid accessing env vars during module load
+  }
+
+  private initializeConfig() {
+    if (this.scriptsDir === null) {
+      // Handle both absolute and relative paths for testing
+      this.scriptsDir = env.SCRIPTS_DIRECTORY.startsWith('/') 
+        ? env.SCRIPTS_DIRECTORY 
+        : join(process.cwd(), env.SCRIPTS_DIRECTORY);
+      this.allowedExtensions = env.ALLOWED_SCRIPT_EXTENSIONS.split(',').map(ext => ext.trim());
+      this.allowedPaths = env.ALLOWED_SCRIPT_PATHS.split(',').map(path => path.trim());
+      this.maxExecutionTime = parseInt(env.MAX_SCRIPT_EXECUTION_TIME, 10);
+    }
   }
 
   /**
    * Get all available scripts in the scripts directory
    */
   async getScripts(): Promise<ScriptInfo[]> {
+    this.initializeConfig();
     try {
-      const files = await readdir(this.scriptsDir);
+      const files = await readdir(this.scriptsDir!);
       const scripts: ScriptInfo[] = [];
 
       for (const file of files) {
-        const filePath = join(this.scriptsDir, file);
+        const filePath = join(this.scriptsDir!, file);
         const stats = await stat(filePath);
 
         if (stats.isFile()) {
           const extension = extname(file);
           
           // Check if file extension is allowed
-          if (this.allowedExtensions.includes(extension)) {
+          if (this.allowedExtensions!.includes(extension)) {
             // Check if file is executable
             const executable = await this.isExecutable(filePath);
             
@@ -74,8 +81,9 @@ export class ScriptManager {
    * Get all available scripts in the ct subdirectory
    */
   async getCtScripts(): Promise<ScriptInfo[]> {
+    this.initializeConfig();
     try {
-      const ctDir = join(this.scriptsDir, 'ct');
+      const ctDir = join(this.scriptsDir!, 'ct');
       const files = await readdir(ctDir);
       const scripts: ScriptInfo[] = [];
 
@@ -87,7 +95,7 @@ export class ScriptManager {
           const extension = extname(file);
           
           // Check if file extension is allowed
-          if (this.allowedExtensions.includes(extension)) {
+          if (this.allowedExtensions!.includes(extension)) {
             // Check if file is executable
             const executable = await this.isExecutable(filePath);
             
@@ -143,8 +151,9 @@ export class ScriptManager {
    * Validate if a script path is allowed to be executed
    */
   validateScriptPath(scriptPath: string): { valid: boolean; message?: string } {
+    this.initializeConfig();
     const resolvedPath = resolve(scriptPath);
-    const scriptsDirResolved = resolve(this.scriptsDir);
+    const scriptsDirResolved = resolve(this.scriptsDir!);
 
     // Check if the script is within the allowed directory
     if (!resolvedPath.startsWith(scriptsDirResolved)) {
@@ -158,7 +167,7 @@ export class ScriptManager {
     const relativePath = resolvedPath.replace(scriptsDirResolved, '').replace(/\\/g, '/');
     const normalizedRelativePath = relativePath.startsWith('/') ? relativePath : '/' + relativePath;
     
-    const isAllowed = this.allowedPaths.some(allowedPath => {
+    const isAllowed = this.allowedPaths!.some(allowedPath => {
       const normalizedAllowedPath = allowedPath.startsWith('/') ? allowedPath : '/' + allowedPath;
       // For root path '/', allow files directly in the scripts directory (no subdirectories)
       if (normalizedAllowedPath === '/') {
@@ -177,10 +186,10 @@ export class ScriptManager {
 
     // Check file extension
     const extension = extname(scriptPath);
-    if (!this.allowedExtensions.includes(extension)) {
+    if (!this.allowedExtensions!.includes(extension)) {
       return {
         valid: false,
-        message: `File extension '${extension}' is not allowed. Allowed extensions: ${this.allowedExtensions.join(', ')}`
+        message: `File extension '${extension}' is not allowed. Allowed extensions: ${this.allowedExtensions!.join(', ')}`
       };
     }
 
@@ -227,7 +236,7 @@ export class ScriptManager {
 
     // Spawn the process
     const childProcess = spawn(command, args, {
-      cwd: this.scriptsDir,
+      cwd: this.scriptsDir!,
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: true
     });
@@ -237,7 +246,7 @@ export class ScriptManager {
       if (!childProcess.killed) {
         childProcess.kill('SIGTERM');
       }
-    }, this.maxExecutionTime);
+    }, this.maxExecutionTime!);
 
     // Clean up timeout when process exits
     childProcess.on('exit', () => {
@@ -268,11 +277,12 @@ export class ScriptManager {
     allowedPaths: string[];
     maxExecutionTime: number;
   } {
+    this.initializeConfig();
     return {
-      path: this.scriptsDir,
-      allowedExtensions: this.allowedExtensions,
-      allowedPaths: this.allowedPaths,
-      maxExecutionTime: this.maxExecutionTime
+      path: this.scriptsDir!,
+      allowedExtensions: this.allowedExtensions!,
+      allowedPaths: this.allowedPaths!,
+      maxExecutionTime: this.maxExecutionTime!
     };
   }
 }

@@ -13,6 +13,7 @@ export const env = createEnv({
       .default("development"),
     // Repository Configuration
     REPO_URL: z.string().url().optional(),
+    ORIGINAL_REPO_URL: z.string().url().optional(),
     REPO_BRANCH: z.string().default("main"),
     SCRIPTS_DIRECTORY: z.string().default("scripts"),
     JSON_FOLDER: z.string().default("json"),
@@ -41,6 +42,7 @@ export const env = createEnv({
     NODE_ENV: process.env.NODE_ENV,
     // Repository Configuration
     REPO_URL: process.env.REPO_URL,
+    ORIGINAL_REPO_URL: process.env.ORIGINAL_REPO_URL,
     REPO_BRANCH: process.env.REPO_BRANCH,
     SCRIPTS_DIRECTORY: process.env.SCRIPTS_DIRECTORY,
     JSON_FOLDER: process.env.JSON_FOLDER,

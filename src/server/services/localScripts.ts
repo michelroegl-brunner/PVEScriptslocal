@@ -73,8 +73,17 @@ export class LocalScriptsService {
 
   async getScriptBySlug(slug: string): Promise<Script | null> {
     try {
-      const scripts = await this.getAllScripts();
-      return scripts.find(script => script.slug === slug) ?? null;
+      // Try to read the specific script file directly instead of loading all scripts
+      const filename = `${slug}.json`;
+      const filePath = join(this.scriptsDirectory, filename);
+      
+      try {
+        const content = await readFile(filePath, 'utf-8');
+        return JSON.parse(content) as Script;
+      } catch {
+        // If file doesn't exist, return null instead of throwing
+        return null;
+      }
     } catch (error) {
       console.error('Error fetching script by slug:', error);
       throw new Error(`Failed to fetch script: ${slug}`);

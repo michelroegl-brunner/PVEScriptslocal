@@ -29,8 +29,12 @@ export function TextViewer({ scriptName, isOpen, onClose }: TextViewerProps) {
     setError(null);
     
     try {
-      const [ctResponse, installResponse] = await Promise.allSettled([
+      // Try to load from different possible locations
+      const [ctResponse, toolsResponse, vmResponse, vwResponse, installResponse] = await Promise.allSettled([
         fetch(`/api/trpc/scripts.getScriptContent?input=${encodeURIComponent(JSON.stringify({ json: { path: `ct/${scriptName}` } }))}`),
+        fetch(`/api/trpc/scripts.getScriptContent?input=${encodeURIComponent(JSON.stringify({ json: { path: `tools/pve/${scriptName}` } }))}`),
+        fetch(`/api/trpc/scripts.getScriptContent?input=${encodeURIComponent(JSON.stringify({ json: { path: `vm/${scriptName}` } }))}`),
+        fetch(`/api/trpc/scripts.getScriptContent?input=${encodeURIComponent(JSON.stringify({ json: { path: `vw/${scriptName}` } }))}`),
         fetch(`/api/trpc/scripts.getScriptContent?input=${encodeURIComponent(JSON.stringify({ json: { path: `install/${slug}-install.sh` } }))}`)
       ]);
 
@@ -40,6 +44,27 @@ export function TextViewer({ scriptName, isOpen, onClose }: TextViewerProps) {
         const ctData = await ctResponse.value.json() as { result?: { data?: { json?: { success?: boolean; content?: string } } } };
         if (ctData.result?.data?.json?.success) {
           content.ctScript = ctData.result.data.json.content;
+        }
+      }
+
+      if (toolsResponse.status === 'fulfilled' && toolsResponse.value.ok) {
+        const toolsData = await toolsResponse.value.json() as { result?: { data?: { json?: { success?: boolean; content?: string } } } };
+        if (toolsData.result?.data?.json?.success) {
+          content.ctScript = toolsData.result.data.json.content; // Use ctScript field for tools scripts too
+        }
+      }
+
+      if (vmResponse.status === 'fulfilled' && vmResponse.value.ok) {
+        const vmData = await vmResponse.value.json() as { result?: { data?: { json?: { success?: boolean; content?: string } } } };
+        if (vmData.result?.data?.json?.success) {
+          content.ctScript = vmData.result.data.json.content; // Use ctScript field for VM scripts too
+        }
+      }
+
+      if (vwResponse.status === 'fulfilled' && vwResponse.value.ok) {
+        const vwData = await vwResponse.value.json() as { result?: { data?: { json?: { success?: boolean; content?: string } } } };
+        if (vwData.result?.data?.json?.success) {
+          content.ctScript = vwData.result.data.json.content; // Use ctScript field for VW scripts too
         }
       }
 

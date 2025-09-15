@@ -215,9 +215,12 @@ export function ScriptsGrid({ onInstallScript }: ScriptsGridProps) {
             return null;
           }
           
+          // Create a unique key by combining slug, name, and index to handle duplicates
+          const uniqueKey = `${script.slug ?? 'unknown'}-${script.name ?? 'unnamed'}-${index}`;
+          
           return (
             <ScriptCard
-              key={script.slug ?? `script-${index}`}
+              key={uniqueKey}
               script={script}
               onClick={handleCardClick}
             />

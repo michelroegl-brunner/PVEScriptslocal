@@ -4,12 +4,18 @@ import { env } from '~/env.js';
 import type { Script } from '~/types/script';
 
 export class ScriptDownloaderService {
-  private scriptsDirectory: string;
-  private repoUrl: string;
+  private scriptsDirectory: string | null = null;
+  private repoUrl: string | null = null;
 
   constructor() {
-    this.scriptsDirectory = join(process.cwd(), 'scripts');
-    this.repoUrl = env.REPO_URL ?? '';
+    // Initialize lazily to avoid accessing env vars during module load
+  }
+
+  private initializeConfig() {
+    if (this.scriptsDirectory === null) {
+      this.scriptsDirectory = join(process.cwd(), 'scripts');
+      this.repoUrl = env.REPO_URL ?? '';
+    }
   }
 
   private async ensureDirectoryExists(dirPath: string): Promise<void> {
@@ -21,6 +27,7 @@ export class ScriptDownloaderService {
   }
 
   private async downloadFileFromGitHub(filePath: string): Promise<string> {
+    this.initializeConfig();
     if (!this.repoUrl) {
       throw new Error('REPO_URL environment variable is not set');
     }
@@ -36,7 +43,8 @@ export class ScriptDownloaderService {
   }
 
   private extractRepoPath(): string {
-    const match = /github\.com\/([^\/]+)\/([^\/]+)/.exec(this.repoUrl);
+    this.initializeConfig();
+    const match = /github\.com\/([^\/]+)\/([^\/]+)/.exec(this.repoUrl!);
     if (!match) {
       throw new Error('Invalid GitHub repository URL');
     }
@@ -53,17 +61,19 @@ export class ScriptDownloaderService {
   }
 
   async loadScript(script: Script): Promise<{ success: boolean; message: string; files: string[] }> {
+    this.initializeConfig();
     try {
       const files: string[] = [];
       
       // Ensure directories exist
-      await this.ensureDirectoryExists(join(this.scriptsDirectory, 'ct'));
-      await this.ensureDirectoryExists(join(this.scriptsDirectory, 'install'));
+      await this.ensureDirectoryExists(join(this.scriptsDirectory!, 'ct'));
+      await this.ensureDirectoryExists(join(this.scriptsDirectory!, 'install'));
+      await this.ensureDirectoryExists(join(this.scriptsDirectory!, 'tools'));
+      await this.ensureDirectoryExists(join(this.scriptsDirectory!, 'vm'));
 
-      // Download and save CT script
       if (script.install_methods?.length) {
         for (const method of script.install_methods) {
-          if (method.script?.startsWith('ct/')) {
+          if (method.script) {
             const scriptPath = method.script;
             const fileName = scriptPath.split('/').pop();
             
@@ -71,28 +81,57 @@ export class ScriptDownloaderService {
               // Download from GitHub
               const content = await this.downloadFileFromGitHub(scriptPath);
               
-              // Modify the content
-              const modifiedContent = this.modifyScriptContent(content);
+              // Determine target directory based on script path
+              let targetDir: string;
+              let filePath: string;
               
-              // Save to local directory
-              const localPath = join(this.scriptsDirectory, 'ct', fileName);
-              await writeFile(localPath, modifiedContent, 'utf-8');
+              if (scriptPath.startsWith('ct/')) {
+                targetDir = 'ct';
+                // Modify the content for CT scripts
+                const modifiedContent = this.modifyScriptContent(content);
+                filePath = join(this.scriptsDirectory!, targetDir, fileName);
+                await writeFile(filePath, modifiedContent, 'utf-8');
+              } else if (scriptPath.startsWith('tools/')) {
+                targetDir = 'tools';
+                // Don't modify content for tools scripts
+                filePath = join(this.scriptsDirectory!, targetDir, fileName);
+                await writeFile(filePath, content, 'utf-8');
+              } else if (scriptPath.startsWith('vm/')) {
+                targetDir = 'vm';
+                // Don't modify content for VM scripts
+                filePath = join(this.scriptsDirectory!, targetDir, fileName);
+                await writeFile(filePath, content, 'utf-8');
+              } else if (scriptPath.startsWith('vw/')) {
+                targetDir = 'vw';
+                // Don't modify content for VW scripts
+                filePath = join(this.scriptsDirectory!, targetDir, fileName);
+                await writeFile(filePath, content, 'utf-8');
+              } else {
+                // Handle other script types (fallback to ct directory)
+                targetDir = 'ct';
+                const modifiedContent = this.modifyScriptContent(content);
+                filePath = join(this.scriptsDirectory!, targetDir, fileName);
+                await writeFile(filePath, modifiedContent, 'utf-8');
+              }
               
-              files.push(`ct/${fileName}`);
+              files.push(`${targetDir}/${fileName}`);
             }
           }
         }
       }
 
-      // Download and save install script
-      const installScriptName = `${script.slug}-install.sh`;
-      try {
-        const installContent = await this.downloadFileFromGitHub(`install/${installScriptName}`);
-        const localInstallPath = join(this.scriptsDirectory, 'install', installScriptName);
-        await writeFile(localInstallPath, installContent, 'utf-8');
-        files.push(`install/${installScriptName}`);
-      } catch {
-        // Install script might not exist, that's okay
+      // Only download install script for CT scripts
+      const hasCtScript = script.install_methods?.some(method => method.script?.startsWith('ct/'));
+      if (hasCtScript) {
+        const installScriptName = `${script.slug}-install.sh`;
+        try {
+          const installContent = await this.downloadFileFromGitHub(`install/${installScriptName}`);
+          const localInstallPath = join(this.scriptsDirectory!, 'install', installScriptName);
+          await writeFile(localInstallPath, installContent, 'utf-8');
+          files.push(`install/${installScriptName}`);
+        } catch {
+          // Install script might not exist, that's okay
+        }
       }
 
       return {
@@ -111,39 +150,81 @@ export class ScriptDownloaderService {
   }
 
   async checkScriptExists(script: Script): Promise<{ ctExists: boolean; installExists: boolean; files: string[] }> {
+    this.initializeConfig();
     const files: string[] = [];
     let ctExists = false;
     let installExists = false;
 
     try {
-      // Check CT script
+      // Check scripts based on their install methods
       if (script.install_methods?.length) {
         for (const method of script.install_methods) {
-          if (method.script?.startsWith('ct/')) {
-            const fileName = method.script.split('/').pop();
+          if (method.script) {
+            const scriptPath = method.script;
+            const fileName = scriptPath.split('/').pop();
+            
             if (fileName) {
-              const localPath = join(this.scriptsDirectory, 'ct', fileName);
-              try {
-                await readFile(localPath, 'utf-8');
-                ctExists = true;
-                files.push(`ct/${fileName}`);
-              } catch {
-                // File doesn't exist
+              let targetDir: string;
+              let localPath: string;
+              
+              if (scriptPath.startsWith('ct/')) {
+                targetDir = 'ct';
+                localPath = join(this.scriptsDirectory!, targetDir, fileName);
+                try {
+                  await readFile(localPath, 'utf-8');
+                  ctExists = true;
+                  files.push(`${targetDir}/${fileName}`);
+                } catch {
+                  // File doesn't exist
+                }
+              } else if (scriptPath.startsWith('tools/')) {
+                targetDir = 'tools';
+                localPath = join(this.scriptsDirectory!, targetDir, fileName);
+                try {
+                  await readFile(localPath, 'utf-8');
+                  ctExists = true; // Use ctExists for tools scripts too for UI consistency
+                  files.push(`${targetDir}/${fileName}`);
+                } catch {
+                  // File doesn't exist
+                }
+              } else if (scriptPath.startsWith('vm/')) {
+                targetDir = 'vm';
+                localPath = join(this.scriptsDirectory!, targetDir, fileName);
+                try {
+                  await readFile(localPath, 'utf-8');
+                  ctExists = true; // Use ctExists for VM scripts too for UI consistency
+                  files.push(`${targetDir}/${fileName}`);
+                } catch {
+                  // File doesn't exist
+                }
+              } else if (scriptPath.startsWith('vw/')) {
+                targetDir = 'vw';
+                localPath = join(this.scriptsDirectory!, targetDir, fileName);
+                try {
+                  await readFile(localPath, 'utf-8');
+                  ctExists = true; // Use ctExists for VW scripts too for UI consistency
+                  files.push(`${targetDir}/${fileName}`);
+                } catch {
+                  // File doesn't exist
+                }
               }
             }
           }
         }
       }
 
-      // Check install script
-      const installScriptName = `${script.slug}-install.sh`;
-      const localInstallPath = join(this.scriptsDirectory, 'install', installScriptName);
+      // Only check install script for CT scripts
+      const hasCtScript = script.install_methods?.some(method => method.script?.startsWith('ct/'));
+      if (hasCtScript) {
+        const installScriptName = `${script.slug}-install.sh`;
+      const localInstallPath = join(this.scriptsDirectory!, 'install', installScriptName);
       try {
         await readFile(localInstallPath, 'utf-8');
         installExists = true;
         files.push(`install/${installScriptName}`);
       } catch {
         // File doesn't exist
+      }
       }
 
       return { ctExists, installExists, files };
@@ -154,6 +235,7 @@ export class ScriptDownloaderService {
   }
 
   async compareScriptContent(script: Script): Promise<{ hasDifferences: boolean; differences: string[] }> {
+    this.initializeConfig();
     const differences: string[] = [];
     let hasDifferences = false;
 
@@ -165,31 +247,44 @@ export class ScriptDownloaderService {
         return { hasDifferences: false, differences: [] };
       }
 
-      // Compare CT script only if it exists locally
+      // If we have local files, proceed with comparison
+      // Use Promise.all to run comparisons in parallel
+      const comparisonPromises: Promise<void>[] = [];
+
+      // Compare scripts only if they exist locally
       if (localFilesExist.ctExists && script.install_methods?.length) {
         for (const method of script.install_methods) {
-          if (method.script?.startsWith('ct/')) {
-            const fileName = method.script.split('/').pop();
+          if (method.script) {
+            const scriptPath = method.script;
+            const fileName = scriptPath.split('/').pop();
+            
             if (fileName) {
-              const localPath = join(this.scriptsDirectory, 'ct', fileName);
-              try {
-                // Read local content
-                const localContent = await readFile(localPath, 'utf-8');
-                
-                // Download remote content
-                const remoteContent = await this.downloadFileFromGitHub(method.script);
-                
-                // Apply the same modification that would be applied during load
-                const modifiedRemoteContent = this.modifyScriptContent(remoteContent);
-                
-                // Compare content
-                if (localContent !== modifiedRemoteContent) {
-                  hasDifferences = true;
-                  differences.push(`ct/${fileName}`);
-                }
-          } catch {
-            // Don't add to differences if there's an error reading files
-          }
+              let targetDir: string;
+              
+              if (scriptPath.startsWith('ct/')) {
+                targetDir = 'ct';
+              } else if (scriptPath.startsWith('tools/')) {
+                targetDir = 'tools';
+              } else if (scriptPath.startsWith('vm/')) {
+                targetDir = 'vm';
+              } else if (scriptPath.startsWith('vw/')) {
+                targetDir = 'vw';
+              } else {
+                continue; // Skip unknown script types
+              }
+              
+              comparisonPromises.push(
+                this.compareSingleFile(scriptPath, `${targetDir}/${fileName}`)
+                  .then(result => {
+                    if (result.hasDifferences) {
+                      hasDifferences = true;
+                      differences.push(result.filePath);
+                    }
+                  })
+                  .catch(() => {
+                    // Don't add to differences if there's an error reading files
+                  })
+              );
             }
           }
         }
@@ -198,26 +293,24 @@ export class ScriptDownloaderService {
       // Compare install script only if it exists locally
       if (localFilesExist.installExists) {
         const installScriptName = `${script.slug}-install.sh`;
-        const localInstallPath = join(this.scriptsDirectory, 'install', installScriptName);
-        try {
-          // Read local content
-          const localContent = await readFile(localInstallPath, 'utf-8');
-          
-          // Download remote content
-          const remoteContent = await this.downloadFileFromGitHub(`install/${installScriptName}`);
-          
-          // Apply the same modification that would be applied during load
-          const modifiedRemoteContent = this.modifyScriptContent(remoteContent);
-          
-          // Compare content
-          if (localContent !== modifiedRemoteContent) {
-            hasDifferences = true;
-            differences.push(`install/${installScriptName}`);
-          }
-        } catch {
-          // Don't add to differences if there's an error reading files
-        }
+        const installScriptPath = `install/${installScriptName}`;
+        
+        comparisonPromises.push(
+          this.compareSingleFile(installScriptPath, installScriptPath)
+            .then(result => {
+              if (result.hasDifferences) {
+                hasDifferences = true;
+                differences.push(result.filePath);
+              }
+            })
+            .catch(() => {
+              // Don't add to differences if there's an error reading files
+            })
+        );
       }
+
+      // Wait for all comparisons to complete
+      await Promise.all(comparisonPromises);
 
       return { hasDifferences, differences };
     } catch (error) {
@@ -226,7 +319,36 @@ export class ScriptDownloaderService {
     }
   }
 
+  private async compareSingleFile(remotePath: string, filePath: string): Promise<{ hasDifferences: boolean; filePath: string }> {
+    try {
+      const localPath = join(this.scriptsDirectory!, filePath);
+      
+      // Read local content
+      const localContent = await readFile(localPath, 'utf-8');
+      
+      // Download remote content
+      const remoteContent = await this.downloadFileFromGitHub(remotePath);
+      
+      // Apply modification only for CT scripts, not for other script types
+      let modifiedRemoteContent: string;
+      if (remotePath.startsWith('ct/')) {
+        modifiedRemoteContent = this.modifyScriptContent(remoteContent);
+      } else {
+        modifiedRemoteContent = remoteContent; // Don't modify tools, vm, or vw scripts
+      }
+      
+      // Compare content
+      const hasDifferences = localContent !== modifiedRemoteContent;
+      
+      return { hasDifferences, filePath };
+    } catch (error) {
+      console.error(`Error comparing file ${filePath}:`, error);
+      return { hasDifferences: false, filePath };
+    }
+  }
+
   async getScriptDiff(script: Script, filePath: string): Promise<{ diff: string | null; localContent: string | null; remoteContent: string | null }> {
+    this.initializeConfig();
     try {
       let localContent: string | null = null;
       let remoteContent: string | null = null;
@@ -235,7 +357,7 @@ export class ScriptDownloaderService {
         // Handle CT script
         const fileName = filePath.split('/').pop();
         if (fileName) {
-          const localPath = join(this.scriptsDirectory, 'ct', fileName);
+          const localPath = join(this.scriptsDirectory!, 'ct', fileName);
           try {
             localContent = await readFile(localPath, 'utf-8');
           } catch {
@@ -255,7 +377,7 @@ export class ScriptDownloaderService {
         }
       } else if (filePath.startsWith('install/')) {
         // Handle install script
-        const localPath = join(this.scriptsDirectory, filePath);
+        const localPath = join(this.scriptsDirectory!, filePath);
         try {
           localContent = await readFile(localPath, 'utf-8');
         } catch {

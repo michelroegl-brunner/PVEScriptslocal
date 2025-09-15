@@ -4,36 +4,44 @@ import { env } from '~/env.js';
 import type { Script, ScriptCard, GitHubFile } from '~/types/script';
 
 export class GitHubJsonService {
-  private baseUrl: string;
-  private repoUrl: string;
-  private branch: string;
-  private jsonFolder: string;
-  private localJsonDirectory: string;
+  private baseUrl: string | null = null;
+  private repoUrl: string | null = null;
+  private branch: string | null = null;
+  private jsonFolder: string | null = null;
+  private localJsonDirectory: string | null = null;
+  private scriptCache: Map<string, Script> = new Map();
 
   constructor() {
-    this.repoUrl = env.REPO_URL ?? "";
-    this.branch = env.REPO_BRANCH;
-    this.jsonFolder = env.JSON_FOLDER;
-    this.localJsonDirectory = join(process.cwd(), 'scripts', 'json');
-    
-    // Only validate GitHub URL if it's provided
-    if (this.repoUrl) {
-      // Extract owner and repo from the URL
-      const urlMatch = /github\.com\/([^\/]+)\/([^\/]+)/.exec(this.repoUrl);
-      if (!urlMatch) {
-        throw new Error(`Invalid GitHub repository URL: ${this.repoUrl}`);
-      }
+    // Initialize lazily to avoid accessing env vars during module load
+  }
+
+  private initializeConfig() {
+    if (this.repoUrl === null) {
+      this.repoUrl = env.REPO_URL ?? "";
+      this.branch = env.REPO_BRANCH;
+      this.jsonFolder = env.JSON_FOLDER;
+      this.localJsonDirectory = join(process.cwd(), 'scripts', 'json');
       
-      const [, owner, repo] = urlMatch;
-      this.baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
-    } else {
-      // Set a dummy base URL if no REPO_URL is provided
-      this.baseUrl = "";
+      // Only validate GitHub URL if it's provided
+      if (this.repoUrl) {
+        // Extract owner and repo from the URL
+        const urlMatch = /github\.com\/([^\/]+)\/([^\/]+)/.exec(this.repoUrl);
+        if (!urlMatch) {
+          throw new Error(`Invalid GitHub repository URL: ${this.repoUrl}`);
+        }
+        
+        const [, owner, repo] = urlMatch;
+        this.baseUrl = `https://api.github.com/repos/${owner}/${repo}`;
+      } else {
+        // Set a dummy base URL if no REPO_URL is provided
+        this.baseUrl = "";
+      }
     }
   }
 
   private async fetchFromGitHub<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    this.initializeConfig();
+    const response = await fetch(`${this.baseUrl!}${endpoint}`, {
       headers: {
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'PVEScripts-Local/1.0',
@@ -48,7 +56,8 @@ export class GitHubJsonService {
   }
 
   private async downloadJsonFile(filePath: string): Promise<Script> {
-    const rawUrl = `https://raw.githubusercontent.com/${this.extractRepoPath()}/${this.branch}/${filePath}`;
+    this.initializeConfig();
+    const rawUrl = `https://raw.githubusercontent.com/${this.extractRepoPath()}/${this.branch!}/${filePath}`;
     
     const response = await fetch(rawUrl);
     if (!response.ok) {
@@ -60,7 +69,8 @@ export class GitHubJsonService {
   }
 
   private extractRepoPath(): string {
-    const match = /github\.com\/([^\/]+)\/([^\/]+)/.exec(this.repoUrl);
+    this.initializeConfig();
+    const match = /github\.com\/([^\/]+)\/([^\/]+)/.exec(this.repoUrl!);
     if (!match) {
       throw new Error('Invalid GitHub repository URL');
     }
@@ -68,13 +78,14 @@ export class GitHubJsonService {
   }
 
   async getJsonFiles(): Promise<GitHubFile[]> {
+    this.initializeConfig();
     if (!this.repoUrl) {
       throw new Error('REPO_URL environment variable is not set. Cannot fetch from GitHub.');
     }
     
     try {
       const files = await this.fetchFromGitHub<GitHubFile[]>(
-        `/contents/${this.jsonFolder}?ref=${this.branch}`
+        `/contents/${this.jsonFolder!}?ref=${this.branch!}`
       );
       
       // Filter for JSON files only
@@ -130,11 +141,48 @@ export class GitHubJsonService {
 
   async getScriptBySlug(slug: string): Promise<Script | null> {
     try {
-      const scripts = await this.getAllScripts();
-      return scripts.find(script => script.slug === slug) ?? null;
+      // Try to get from local cache first
+      const localScript = await this.getScriptFromLocal(slug);
+      if (localScript) {
+        return localScript;
+      }
+
+      // If not found locally, try to download just this specific script
+      try {
+        this.initializeConfig();
+        const script = await this.downloadJsonFile(`${this.jsonFolder!}/${slug}.json`);
+        return script;
+      } catch {
+        console.log(`Script ${slug} not found in repository`);
+        return null;
+      }
     } catch (error) {
       console.error('Error fetching script by slug:', error);
       throw new Error(`Failed to fetch script: ${slug}`);
+    }
+  }
+
+  private async getScriptFromLocal(slug: string): Promise<Script | null> {
+    try {
+      // Check cache first
+      if (this.scriptCache.has(slug)) {
+        return this.scriptCache.get(slug)!;
+      }
+
+      const { readFile } = await import('fs/promises');
+      const { join } = await import('path');
+      
+      this.initializeConfig();
+      const filePath = join(this.localJsonDirectory!, `${slug}.json`);
+      const content = await readFile(filePath, 'utf-8');
+      const script = JSON.parse(content) as Script;
+      
+      // Cache the script
+      this.scriptCache.set(slug, script);
+      
+      return script;
+    } catch {
+      return null;
     }
   }
 
@@ -162,14 +210,15 @@ export class GitHubJsonService {
   }
 
   private async saveScriptsLocally(scripts: Script[]): Promise<void> {
+    this.initializeConfig();
     try {
       // Ensure the directory exists
-      await mkdir(this.localJsonDirectory, { recursive: true });
+      await mkdir(this.localJsonDirectory!, { recursive: true });
 
       // Save each script as a JSON file
       for (const script of scripts) {
         const filename = `${script.slug}.json`;
-        const filePath = join(this.localJsonDirectory, filename);
+        const filePath = join(this.localJsonDirectory!, filename);
         const content = JSON.stringify(script, null, 2);
         await writeFile(filePath, content, 'utf-8');
       }

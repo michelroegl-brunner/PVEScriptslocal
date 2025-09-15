@@ -2,6 +2,44 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import Home from '../page'
 
+// Mock tRPC
+vi.mock('~/trpc/react', () => ({
+  api: {
+    scripts: {
+      getRepoStatus: {
+        useQuery: vi.fn(() => ({
+          data: { isRepo: true, isBehind: false, branch: 'main', lastCommit: 'abc123' },
+          refetch: vi.fn(),
+        })),
+      },
+      getScriptCards: {
+        useQuery: vi.fn(() => ({
+          data: { success: true, cards: [] },
+          isLoading: false,
+          error: null,
+        })),
+      },
+      getCtScripts: {
+        useQuery: vi.fn(() => ({
+          data: { scripts: [] },
+          isLoading: false,
+          error: null,
+        })),
+      },
+      getScriptBySlug: {
+        useQuery: vi.fn(() => ({
+          data: null,
+        })),
+      },
+      fullUpdateRepo: {
+        useMutation: vi.fn(() => ({
+          mutate: vi.fn(),
+        })),
+      },
+    },
+  },
+}))
+
 // Mock child components
 vi.mock('../_components/ScriptsGrid', () => ({
   ScriptsGrid: ({ onInstallScript }: { onInstallScript?: (path: string, name: string) => void }) => (

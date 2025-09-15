@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { ScriptsGrid } from './_components/ScriptsGrid';
 import { ResyncButton } from './_components/ResyncButton';
+import { RepoStatusButton } from './_components/RepoStatusButton';
 import { Terminal } from './_components/Terminal';
 
 export default function Home() {
@@ -28,6 +29,11 @@ export default function Home() {
           <p className="text-gray-600">
             Manage and execute Proxmox helper scripts locally with live output streaming
           </p>
+        </div>
+
+        {/* Repository Status and Update */}
+        <div className="mb-8">
+          <RepoStatusButton />
         </div>
 
         {/* Resync Button */}
