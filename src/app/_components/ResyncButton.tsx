@@ -14,11 +14,15 @@ export function ResyncButton() {
       setLastSync(new Date());
       if (data.success) {
         setSyncMessage(data.message ?? 'Scripts synced successfully');
+        // Reload the page after successful sync
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000); // Wait 2 seconds to show the success message
       } else {
         setSyncMessage(data.error ?? 'Failed to sync scripts');
+        // Clear message after 3 seconds for errors
+        setTimeout(() => setSyncMessage(null), 3000);
       }
-      // Clear message after 3 seconds
-      setTimeout(() => setSyncMessage(null), 3000);
     },
     onError: (error) => {
       setIsResyncing(false);

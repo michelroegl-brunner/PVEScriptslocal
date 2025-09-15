@@ -19,9 +19,11 @@ vi.mock('~/server/lib/git', () => ({
   },
 }))
 
-vi.mock('~/server/services/github', () => ({
-  githubService: {
+vi.mock('~/server/services/githubJsonService', () => ({
+  githubJsonService: {
+    syncJsonFiles: vi.fn(),
     getAllScripts: vi.fn(),
+    getScriptBySlug: vi.fn(),
   },
 }))
 
@@ -212,8 +214,8 @@ describe('scriptsRouter', () => {
     it('should return script on success', async () => {
       const mockScript = { name: 'Test Script', slug: 'test-script' }
 
-      const { localScriptsService } = await import('~/server/services/localScripts')
-      vi.mocked(localScriptsService.getScriptBySlug).mockResolvedValue(mockScript)
+      const { githubJsonService } = await import('~/server/services/githubJsonService')
+      vi.mocked(githubJsonService.getScriptBySlug).mockResolvedValue(mockScript)
 
       const result = await caller.getScriptBySlug({ slug: 'test-script' })
 
@@ -224,8 +226,8 @@ describe('scriptsRouter', () => {
     })
 
     it('should return error when script not found', async () => {
-      const { localScriptsService } = await import('~/server/services/localScripts')
-      vi.mocked(localScriptsService.getScriptBySlug).mockResolvedValue(null)
+      const { githubJsonService } = await import('~/server/services/githubJsonService')
+      vi.mocked(githubJsonService.getScriptBySlug).mockResolvedValue(null)
 
       const result = await caller.getScriptBySlug({ slug: 'nonexistent' })
 
@@ -239,35 +241,36 @@ describe('scriptsRouter', () => {
 
   describe('resyncScripts', () => {
     it('should resync scripts successfully', async () => {
-      const mockGitHubScripts = [
-        { name: 'Script 1', slug: 'script-1' },
-        { name: 'Script 2', slug: 'script-2' },
-      ]
-
-      const { githubService } = await import('~/server/services/github')
-      const { localScriptsService } = await import('~/server/services/localScripts')
+      const { githubJsonService } = await import('~/server/services/githubJsonService')
       
-      vi.mocked(githubService.getAllScripts).mockResolvedValue(mockGitHubScripts)
-      vi.mocked(localScriptsService.saveScriptsFromGitHub).mockResolvedValue(undefined)
+      vi.mocked(githubJsonService.syncJsonFiles).mockResolvedValue({
+        success: true,
+        message: 'Successfully synced 2 scripts from GitHub using 1 API call + raw downloads',
+        count: 2
+      })
 
       const result = await caller.resyncScripts()
 
       expect(result).toEqual({
         success: true,
-        message: 'Successfully synced 2 scripts from GitHub to local directory',
+        message: 'Successfully synced 2 scripts from GitHub using 1 API call + raw downloads',
         count: 2,
       })
     })
 
     it('should return error on failure', async () => {
-      const { githubService } = await import('~/server/services/github')
-      vi.mocked(githubService.getAllScripts).mockRejectedValue(new Error('GitHub error'))
+      const { githubJsonService } = await import('~/server/services/githubJsonService')
+      vi.mocked(githubJsonService.syncJsonFiles).mockResolvedValue({
+        success: false,
+        message: 'GitHub error',
+        count: 0
+      })
 
       const result = await caller.resyncScripts()
 
       expect(result).toEqual({
         success: false,
-        error: 'GitHub error',
+        message: 'GitHub error',
         count: 0,
       })
     })

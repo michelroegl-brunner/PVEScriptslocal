@@ -40,7 +40,7 @@
       "text": "After installation, checkout: ´https://github.com/community-scripts/ProxmoxVE/discussions/836´ for useful Debian commands",
       "type": "info"
     },
-	{
+    {
       "text": "If you use Cloud-init, checkout after installation: ´https://github.com/community-scripts/ProxmoxVE/discussions/272´",
       "type": "info"
     }

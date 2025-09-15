@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { scriptManager } from "~/server/lib/scripts";
 import { gitManager } from "~/server/lib/git";
-import { githubService } from "~/server/services/github";
+import { githubJsonService } from "~/server/services/githubJsonService";
 import { localScriptsService } from "~/server/services/localScripts";
 import { scriptDownloaderService } from "~/server/services/scriptDownloader";
 
@@ -97,11 +97,11 @@ export const scriptsRouter = createTRPCRouter({
       }
     }),
 
-  // Get all scripts from local directory
+  // Get all scripts from GitHub (1 API call + raw downloads)
   getAllScripts: publicProcedure
     .query(async () => {
       try {
-        const scripts = await localScriptsService.getAllScripts();
+        const scripts = await githubJsonService.getAllScripts();
         return { success: true, scripts };
       } catch (error) {
         return {
@@ -112,12 +112,12 @@ export const scriptsRouter = createTRPCRouter({
       }
     }),
 
-  // Get script by slug from local directory
+  // Get script by slug from GitHub (1 API call + raw downloads)
   getScriptBySlug: publicProcedure
     .input(z.object({ slug: z.string() }))
     .query(async ({ input }) => {
       try {
-        const script = await localScriptsService.getScriptBySlug(input.slug);
+        const script = await githubJsonService.getScriptBySlug(input.slug);
         if (!script) {
           return {
             success: false,
@@ -135,20 +135,17 @@ export const scriptsRouter = createTRPCRouter({
       }
     }),
 
-  // Resync scripts from GitHub repo to local directory
+  // Resync scripts from GitHub (1 API call + raw downloads)
   resyncScripts: publicProcedure
     .mutation(async () => {
       try {
-        // First, try to get scripts from GitHub
-        const githubScripts = await githubService.getAllScripts();
-        
-        // Save scripts to local directory
-        await localScriptsService.saveScriptsFromGitHub(githubScripts);
+        // Sync JSON files using 1 API call + raw downloads
+        const result = await githubJsonService.syncJsonFiles();
         
         return { 
-          success: true, 
-          message: `Successfully synced ${githubScripts.length} scripts from GitHub to local directory`,
-          count: githubScripts.length
+          success: result.success, 
+          message: result.message,
+          count: result.count
         };
       } catch (error) {
         console.error('Error in resyncScripts:', error);
