@@ -37,7 +37,7 @@ A modern web-based management interface for Proxmox VE (PVE) helper scripts. Thi
 - **Node.js** 22+ and npm
 - **Git** for cloning the repository
 - **Proxmox VE environment**
-- **build-essentials** ```apt-install build-essentials``` 
+- **build-essentials** ```apt install build-essential``` 
 
 ## 🚀 Installation
 
