@@ -9,12 +9,15 @@ const execAsync = promisify(exec);
 export class GitManager {
   private git: SimpleGit;
   private repoPath: string;
-  private scriptsDir: string;
+  private scriptsDir: string | null = null;
 
   constructor() {
     this.repoPath = process.cwd();
-    this.scriptsDir = join(this.repoPath, env.SCRIPTS_DIRECTORY);
     this.git = simpleGit(this.repoPath);
+  }
+
+  private initializeConfig() {
+    this.scriptsDir ??= join(this.repoPath, env.SCRIPTS_DIRECTORY);
   }
 
   /**
