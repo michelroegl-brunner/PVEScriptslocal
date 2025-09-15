@@ -12,6 +12,7 @@ A modern web-based management interface for Proxmox VE (PVE) helper scripts. Thi
 - **Security**: Sandboxed script execution with path validation and time limits
 - **Database Integration**: PostgreSQL backend for script metadata and execution history
 - **WebSocket Communication**: Real-time bidirectional communication for script execution
+- 
 
 ## 🏗️ Architecture
 
