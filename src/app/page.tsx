@@ -33,10 +33,7 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Repository Status and Update */}
-          <div className="mb-8">
-            <RepoStatusButton />
-          </div>
+       
 
           {/* Resync Button */}
           <div className="mb-8">
