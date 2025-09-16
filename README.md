@@ -42,6 +42,8 @@ A modern web-based management interface for Proxmox VE (PVE) helper scripts. Thi
 
 ## 🚀 Installation
 
+You can use the provided ```install.sh``` file in the root directory of this repository or follow the steps below to install manually. The install script takes care of all prerequisits.
+
 ### 1. Clone the Repository
 
 ```bash
