@@ -42,7 +42,36 @@ A modern web-based management interface for Proxmox VE (PVE) helper scripts. Thi
 
 ## 🚀 Installation
 
-You can use the provided ```install.sh``` file in the root directory of this repository or follow the steps below to install manually. The install script takes care of all prerequisits.
+You can either install automatically via the provided installer script or do a manual setup.
+
+### Option 1: Install via Bash (Recommended)
+
+Run this command directly on your Proxmox VE host:
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/michelroegl-brunner/PVESciptslocal/main/installer.sh)"
+```
+
+## The script will:
+- Verify that you are running on Proxmox VE
+- Check and install git and Node.js 24.x if missing
+- Clone the repository into /opt/PVESciptslocal (or your chosen path)
+- Run npm install and build the project
+- Set up .env from .env.example if missing
+- Create a systemd service (pvescriptslocal.service) for easy start/stop management
+
+After installation, the app will be accessible at:
+👉 http://<YOUR_PVE_IP>:3000
+
+You can manage the service with:
+```bash
+systemctl start pvescriptslocal
+systemctl stop pvescriptslocal
+systemctl status pvescriptslocal
+```
+
+
+### Option 2: Manual Installation
 
 ### 1. Clone the Repository
 
