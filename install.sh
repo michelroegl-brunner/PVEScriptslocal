@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------------------
-# Installer for PVESciptslocal
+# Installer for PVESciptslocal with systemd integration
 # ------------------------------------------------------------------------------
 
 set -euo pipefail
@@ -79,11 +79,46 @@ msg_info "Building application..."
 npm run build
 msg_ok "Build completed."
 
-# --- Start the application ---
-read -rp "Do you want to start the application now? (y/N): " START_APP
-if [[ "$START_APP" =~ ^[Yy]$ ]]; then
-  msg_info "Starting application..."
-  npm start
+# --- Create systemd service ---
+SERVICE_NAME="pvescriptslocal"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+
+msg_info "Creating systemd service at $SERVICE_FILE..."
+cat > "$SERVICE_FILE" <<EOF
+[Unit]
+Description=PVEScriptslocal Service
+After=network.target
+
+[Service]
+WorkingDirectory=${INSTALL_DIR}
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+Environment=NODE_ENV=production
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reexec
+msg_ok "Systemd service created and started."
+
+# --- Enable/Start Service ---
+read -rp "Enable and start the service now? (y/N): " START_SERVICE
+if [[ "$START_SERVICE" =~ ^[Yy]$ ]]; then
+  systemctl enable --now pvescriptslocal.service
+  msg_ok "Service enabled and started. Check status with: systemctl status pvescriptslocal"
 else
-  msg_info "You can start the app anytime by running: cd $INSTALL_DIR && npm start"
+  msg_info "You can start it manually with: systemctl start pvescriptslocal"
 fi
+
+echo
+echo "---------------------------------------------"
+echo " Service installed: $SERVICE_NAME"
+echo " Manage it with:"
+echo "   systemctl start  $SERVICE_NAME"
+echo "   systemctl stop   $SERVICE_NAME"
+echo "   systemctl status $SERVICE_NAME"
+echo " App will be available at: http://<IP>:3000"
+echo "---------------------------------------------"
