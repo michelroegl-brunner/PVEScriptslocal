@@ -49,7 +49,7 @@ You can either install automatically via the provided installer script or do a m
 Run this command directly on your Proxmox VE host:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/michelroegl-brunner/PVESciptslocal/main/installer.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/michelroegl-brunner/PVESciptslocal/main/install.sh)"
 ```
 
 ## The script will:
