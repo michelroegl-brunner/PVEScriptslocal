@@ -15,20 +15,13 @@ msg_info() { echo -e "⏳ $YW$1$CL"; }
 msg_ok()   { echo -e "✔️  $GN$1$CL"; }
 msg_err()  { echo -e "❌ $RD$1$CL"; }
 
-# --- PVE Check ----------------------------------------------------------------
-check_pve() {
-  if ! command -v pveversion >/dev/null 2>&1; then
-    msg_err "This script must be executed on a Proxmox VE host."
-    exit 1
-  fi
-  msg_ok "Proxmox VE detected: $(pveversion)"
-}
+
 
 # --- Dependency Check & Install -----------------------------------------------
 check_dependencies() {
   msg_info "Checking required packages (build-essential, git)..."
   apt-get update
-  apt-get install -y build-essential git
+  apt-get install -y build-essential git sshpass expect
   msg_ok "Dependencies installed."
 }
 
@@ -74,6 +67,11 @@ setup_app() {
   else
     msg_ok ".env file already exists, keeping it."
   fi
+
+  msg_info "Setting up database directory..."
+  mkdir -p data
+  chmod 755 data
+  msg_ok "Database directory created."
 
   msg_info "Building application..."
   npm run build
