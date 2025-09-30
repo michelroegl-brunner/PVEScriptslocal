@@ -4,15 +4,15 @@
 import { useState } from 'react';
 import { ScriptsGrid } from './_components/ScriptsGrid';
 import { ResyncButton } from './_components/ResyncButton';
-import { RepoStatusButton } from './_components/RepoStatusButton';
 import { Terminal } from './_components/Terminal';
-import { ProxmoxCheck } from './_components/ProxmoxCheck';
+import { SettingsButton } from './_components/SettingsButton';
 
 export default function Home() {
-  const [runningScript, setRunningScript] = useState<{ path: string; name: string } | null>(null);
+  const [runningScript, setRunningScript] = useState<{ path: string; name: string; mode?: 'local' | 'ssh'; server?: any } | null>(null);
 
-  const handleRunScript = (scriptPath: string, scriptName: string) => {
-    setRunningScript({ path: scriptPath, name: scriptName });
+  const handleRunScript = (scriptPath: string, scriptName: string, mode?: 'local' | 'ssh', server?: any) => {
+    console.log('handleRunScript called with:', { scriptPath, scriptName, mode, server });
+    setRunningScript({ path: scriptPath, name: scriptName, mode, server });
   };
 
   const handleCloseTerminal = () => {
@@ -20,43 +20,43 @@ export default function Home() {
   };
 
   return (
-    <ProxmoxCheck>
-      <main className="min-h-screen bg-gray-100">
-        <div className="container mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-800 mb-2">
-              🚀 PVE Scripts Management
-            </h1>
-            <p className="text-gray-600">
-              Manage and execute Proxmox helper scripts locally with live output streaming
-            </p>
-          </div>
+    <main className="min-h-screen bg-gray-100">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">
+            🚀 PVE Scripts Management
+          </h1>
+          <p className="text-gray-600">
+            Manage and execute Proxmox helper scripts locally with live output streaming
+          </p>
+        </div>
 
        
 
-          {/* Resync Button */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <div></div>
-              <ResyncButton />
-            </div>
+        {/* Controls */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <SettingsButton />
+            <ResyncButton />
           </div>
-
-          {/* Running Script Terminal */}
-          {runningScript && (
-            <div className="mb-8">
-              <Terminal
-                scriptPath={runningScript.path}
-                onClose={handleCloseTerminal}
-              />
-            </div>
-          )}
-
-          {/* Scripts List */}
-          <ScriptsGrid onInstallScript={handleRunScript} />
         </div>
-      </main>
-    </ProxmoxCheck>
+
+        {/* Running Script Terminal */}
+        {runningScript && (
+          <div className="mb-8">
+            <Terminal
+              scriptPath={runningScript.path}
+              onClose={handleCloseTerminal}
+              mode={runningScript.mode}
+              server={runningScript.server}
+            />
+          </div>
+        )}
+
+        {/* Scripts List */}
+        <ScriptsGrid onInstallScript={handleRunScript} />
+      </div>
+    </main>
   );
 }

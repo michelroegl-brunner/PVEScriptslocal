@@ -15,7 +15,9 @@ variables() {
   CT_TYPE=${var_unprivileged:-$CT_TYPE}
 }
 
-source "$(dirname "${BASH_SOURCE[0]}")/core.func"
+# Get absolute path to core directory
+CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$CORE_DIR/core.func"
 
 
 # This function enables error handling in the script by setting options and defining a trap for the ERR signal.
@@ -972,7 +974,7 @@ install_script() {
       header_info
       echo -e "${INFO}${HOLD} ${GN}Using Config File on node $PVEHOST_NAME${CL}"
       METHOD="config_file"
-      source "$(dirname "${BASH_SOURCE[0]}")/config-file.func"
+      source "$CORE_DIR/config-file.func"
       config_file
       break
       ;;
@@ -1043,7 +1045,7 @@ check_container_storage() {
 }
 
 start() {
-  source "$(dirname "${BASH_SOURCE[0]}")/tools.func"
+  source "$CORE_DIR/tools.func"
   if command -v pveversion >/dev/null 2>&1; then
     install_script
     
@@ -1105,10 +1107,12 @@ build_container() {
 
   TEMP_DIR=$(mktemp -d)
   pushd "$TEMP_DIR" >/dev/null
+  # CORE_DIR is already defined at the top of the file
+  
   if [ "$var_os" == "alpine" ]; then
-    export FUNCTIONS_FILE_PATH="$(cat "$(dirname "${BASH_SOURCE[0]}")/core.func" && echo && cat "$(dirname "${BASH_SOURCE[0]}")/tools.func" && echo && cat "$(dirname "${BASH_SOURCE[0]}")/alpine-install.func")"
+    export FUNCTIONS_FILE_PATH="$(cat "$CORE_DIR/core.func" && echo && cat "$CORE_DIR/tools.func" && echo && cat "$CORE_DIR/alpine-install.func")"
   else
-    export FUNCTIONS_FILE_PATH="$(cat "$(dirname "${BASH_SOURCE[0]}")/core.func" && echo && cat "$(dirname "${BASH_SOURCE[0]}")/tools.func" && echo && cat "$(dirname "${BASH_SOURCE[0]}")/install.func")"
+    export FUNCTIONS_FILE_PATH="$(cat "$CORE_DIR/core.func" && echo && cat "$CORE_DIR/tools.func" && echo && cat "$CORE_DIR/install.func")"
   fi
 
   export DIAGNOSTICS="$DIAGNOSTICS"
@@ -1143,7 +1147,7 @@ build_container() {
     $PW
   "
   # This executes create_lxc.sh and creates the container and .conf file
-  bash "$(dirname "${BASH_SOURCE[0]}")/create_lxc.sh" $?
+  bash "$CORE_DIR/create_lxc.sh" $?
 
   LXC_CONFIG="/etc/pve/lxc/${CTID}.conf"
 
@@ -1337,7 +1341,7 @@ EOF'
   msg_ok "Customized LXC Container"
 
   
-  lxc-attach -n "$CTID" -- bash -c "$(cat "$(dirname "${BASH_SOURCE[0]}")/../install/${var_install}.sh")"
+  lxc-attach -n "$CTID" -- bash -c "$(cat "$(dirname "$CORE_DIR")/install/${var_install}.sh")"
 }
 
 # This function sets the description of the container.

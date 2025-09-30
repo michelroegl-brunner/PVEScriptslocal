@@ -6,6 +6,7 @@ import { spawn } from 'child_process';
 import { join, resolve } from 'path';
 import stripAnsi from 'strip-ansi';
 import { spawn as ptySpawn } from 'node-pty';
+import { getSSHExecutionService } from './src/server/ssh-execution-service.js';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
@@ -26,11 +27,27 @@ const handle = app.getRequestHandler();
  */
 
 /**
+ * @typedef {Object} ServerInfo
+ * @property {string} name
+ * @property {string} ip
+ * @property {string} user
+ * @property {string} password
+ */
+
+/**
+ * @typedef {Object} ExecutionResult
+ * @property {any} process
+ * @property {Function} kill
+ */
+
+/**
  * @typedef {Object} WebSocketMessage
  * @property {string} action
  * @property {string} [scriptPath]
  * @property {string} [executionId]
  * @property {string} [input]
+ * @property {string} [mode]
+ * @property {ServerInfo} [server]
  */
 
 class ScriptExecutionHandler {
@@ -55,7 +72,10 @@ class ScriptExecutionHandler {
       
       ws.on('message', (data) => {
         try {
-          const message = JSON.parse(data.toString());
+          const rawMessage = data.toString();
+          console.log('Raw WebSocket message received:', rawMessage);
+          const message = JSON.parse(rawMessage);
+          console.log('Parsed WebSocket message:', message);
           this.handleMessage(/** @type {ExtendedWebSocket} */ (ws), message);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -83,12 +103,16 @@ class ScriptExecutionHandler {
    * @param {WebSocketMessage} message
    */
   async handleMessage(ws, message) {
-    const { action, scriptPath, executionId, input } = message;
+    const { action, scriptPath, executionId, input, mode, server } = message;
+    
+    // Debug logging
+    console.log('WebSocket message received:', { action, scriptPath, executionId, mode, server: server ? { name: server.name, ip: server.ip } : null });
+    console.log('Full message object:', JSON.stringify(message, null, 2));
 
     switch (action) {
       case 'start':
         if (scriptPath && executionId) {
-          await this.startScriptExecution(ws, scriptPath, executionId);
+          await this.startScriptExecution(ws, scriptPath, executionId, mode, server);
         } else {
           this.sendMessage(ws, {
             type: 'error',
@@ -123,10 +147,39 @@ class ScriptExecutionHandler {
    * @param {ExtendedWebSocket} ws
    * @param {string} scriptPath
    * @param {string} executionId
+   * @param {string} mode
+   * @param {ServerInfo|null} server
    */
-  async startScriptExecution(ws, scriptPath, executionId) {
+  async startScriptExecution(ws, scriptPath, executionId, mode = 'local', server = null) {
     try {
-      // Basic validation
+      // Debug logging
+      console.log('startScriptExecution called with:', { mode, server: server ? { name: server.name, ip: server.ip } : null });
+      console.log('Full server object:', JSON.stringify(server, null, 2));
+      
+      // Check if execution is already running
+      if (this.activeExecutions.has(executionId)) {
+        this.sendMessage(ws, {
+          type: 'error',
+          data: 'Script execution already running',
+          timestamp: Date.now()
+        });
+        return;
+      }
+
+      // Handle SSH execution
+      if (mode === 'ssh' && server) {
+        console.log('Starting SSH execution...');
+        await this.startSSHScriptExecution(ws, scriptPath, executionId, server);
+        return;
+      }
+      
+      if (mode === 'ssh' && !server) {
+        console.log('SSH mode requested but no server provided, falling back to local execution');
+      }
+      
+      console.log('Starting local execution...');
+
+      // Basic validation for local execution
       const scriptsDir = join(process.cwd(), 'scripts');
       const resolvedPath = resolve(scriptPath);
       
@@ -134,16 +187,6 @@ class ScriptExecutionHandler {
         this.sendMessage(ws, {
           type: 'error',
           data: 'Script path is not within the allowed scripts directory',
-          timestamp: Date.now()
-        });
-        return;
-      }
-
-      // Check if execution is already running
-      if (this.activeExecutions.has(executionId)) {
-        this.sendMessage(ws, {
-          type: 'error',
-          data: 'Script execution already running',
           timestamp: Date.now()
         });
         return;
@@ -201,6 +244,69 @@ class ScriptExecutionHandler {
       this.sendMessage(ws, {
         type: 'error',
         data: `Failed to start script: ${error instanceof Error ? error.message : String(error)}`,
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  /**
+   * Start SSH script execution
+   * @param {ExtendedWebSocket} ws
+   * @param {string} scriptPath
+   * @param {string} executionId
+   * @param {ServerInfo} server
+   */
+  async startSSHScriptExecution(ws, scriptPath, executionId, server) {
+    console.log('startSSHScriptExecution called with server:', server);
+    const sshService = getSSHExecutionService();
+
+    // Send start message
+    this.sendMessage(ws, {
+      type: 'start',
+      data: `Starting SSH execution of ${scriptPath} on ${server.name} (${server.ip})`,
+      timestamp: Date.now()
+    });
+
+    try {
+      const execution = /** @type {ExecutionResult} */ (await sshService.executeScript(
+        server,
+        scriptPath,
+        /** @param {string} data */ (data) => {
+          // Handle data output
+          this.sendMessage(ws, {
+            type: 'output',
+            data: data,
+            timestamp: Date.now()
+          });
+        },
+        /** @param {string} error */ (error) => {
+          // Handle errors
+          this.sendMessage(ws, {
+            type: 'error',
+            data: error,
+            timestamp: Date.now()
+          });
+        },
+        /** @param {number} code */ (code) => {
+          // Handle process exit
+          this.sendMessage(ws, {
+            type: 'end',
+            data: `SSH script execution finished with code: ${code}`,
+            timestamp: Date.now()
+          });
+          
+          // Clean up
+          this.activeExecutions.delete(executionId);
+        }
+      ));
+
+      // Store the execution
+      this.activeExecutions.set(executionId, { process: execution.process, ws });
+
+    } catch (error) {
+      this.sendMessage(ws, {
+        type: 'error',
+        data: `Failed to start SSH execution: ${error instanceof Error ? error.message : String(error)}`,
         timestamp: Date.now()
       });
     }

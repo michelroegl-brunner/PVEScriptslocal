@@ -6,6 +6,8 @@ import '@xterm/xterm/css/xterm.css';
 interface TerminalProps {
   scriptPath: string;
   onClose: () => void;
+  mode?: 'local' | 'ssh';
+  server?: any;
 }
 
 interface TerminalMessage {
@@ -14,7 +16,7 @@ interface TerminalMessage {
   timestamp: number;
 }
 
-export function Terminal({ scriptPath, onClose }: TerminalProps) {
+export function Terminal({ scriptPath, onClose, mode = 'local', server }: TerminalProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isClient, setIsClient] = useState(false);
@@ -58,6 +60,12 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
         cursorStyle: 'block',
         scrollback: 1000,
         tabStopWidth: 4,
+        allowTransparency: false,
+        convertEol: true,
+        disableStdin: false,
+        macOptionIsMeta: false,
+        rightClickSelectsWord: false,
+        wordSeparator: ' ()[]{}\'"`<>|',
       });
 
       // Add addons
@@ -148,11 +156,15 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
         isConnectingRef.current = false;
         
         // Send start message immediately after connection
-        ws.send(JSON.stringify({
+        const message = {
           action: 'start',
           scriptPath,
-          executionId
-        }));
+          executionId,
+          mode,
+          server
+        };
+        console.log('Sending WebSocket message:', message);
+        ws.send(JSON.stringify(message));
       };
 
       ws.onmessage = (event) => {
@@ -189,7 +201,7 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
         wsRef.current.close();
       }
     };
-  }, [scriptPath, executionId]);
+  }, [scriptPath, executionId, mode, server]);
 
   const handleMessage = (message: TerminalMessage) => {
     if (!xtermRef.current) return;
@@ -211,6 +223,12 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
         if (message.data.includes('\x1B[') || message.data.includes('\u001b[')) {
           // This is likely terminal output sent to stderr, treat it as normal output
           xtermRef.current.write(message.data);
+        } else if (message.data.includes('TERM environment variable not set')) {
+          // This is a common warning, treat as normal output
+          xtermRef.current.write(message.data);
+        } else if (message.data.includes('exit code') && message.data.includes('clear')) {
+          // This is a script error, show it with error prefix
+          xtermRef.current.writeln(`${prefix}❌ ${message.data}`);
         } else {
           // This is a real error, show it with error prefix
           xtermRef.current.writeln(`${prefix}❌ ${message.data}`);
@@ -228,7 +246,9 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
       wsRef.current.send(JSON.stringify({
         action: 'start',
         scriptPath,
-        executionId
+        executionId,
+        mode,
+        server
       }));
     }
   };
@@ -282,7 +302,7 @@ export function Terminal({ scriptPath, onClose }: TerminalProps) {
             <div className="w-3 h-3 bg-green-500 rounded-full"></div>
           </div>
           <span className="text-gray-300 font-mono text-sm ml-2">
-            {scriptName}
+            {scriptName} {mode === 'ssh' && server && `(SSH: ${server.name})`}
           </span>
         </div>
         

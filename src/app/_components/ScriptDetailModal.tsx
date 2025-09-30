@@ -6,12 +6,13 @@ import { api } from '~/trpc/react';
 import type { Script } from '~/types/script';
 import { DiffViewer } from './DiffViewer';
 import { TextViewer } from './TextViewer';
+import { ExecutionModeModal } from './ExecutionModeModal';
 
 interface ScriptDetailModalProps {
   script: Script | null;
   isOpen: boolean;
   onClose: () => void;
-  onInstallScript?: (scriptPath: string, scriptName: string) => void;
+  onInstallScript?: (scriptPath: string, scriptName: string, mode?: 'local' | 'ssh', server?: any) => void;
 }
 
 export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: ScriptDetailModalProps) {
@@ -21,6 +22,7 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
   const [diffViewerOpen, setDiffViewerOpen] = useState(false);
   const [selectedDiffFile, setSelectedDiffFile] = useState<string | null>(null);
   const [textViewerOpen, setTextViewerOpen] = useState(false);
+  const [executionModeOpen, setExecutionModeOpen] = useState(false);
 
   // Check if script files exist locally
   const { data: scriptFilesData, refetch: refetchScriptFiles, isLoading: scriptFilesLoading } = api.scripts.checkScriptFiles.useQuery(
@@ -79,6 +81,11 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
   };
 
   const handleInstallScript = () => {
+    if (!script) return;
+    setExecutionModeOpen(true);
+  };
+
+  const handleExecuteScript = (mode: 'local' | 'ssh', server?: any) => {
     if (!script || !onInstallScript) return;
     
     // Find the script path (CT or tools)
@@ -86,7 +93,9 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
     if (scriptMethod?.script) {
       const scriptPath = `scripts/${scriptMethod.script}`;
       const scriptName = script.name;
-      onInstallScript(scriptPath, scriptName);
+      
+      // Pass execution mode and server info to the parent
+      onInstallScript(scriptPath, scriptName, mode, server);
       
       // Scroll to top of the page to see the terminal
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -511,6 +520,16 @@ export function ScriptDetailModal({ script, isOpen, onClose, onInstallScript }: 
           scriptName={script.install_methods?.find(method => method.script?.startsWith('ct/'))?.script?.split('/').pop() ?? `${script.slug}.sh`}
           isOpen={textViewerOpen}
           onClose={() => setTextViewerOpen(false)}
+        />
+      )}
+
+      {/* Execution Mode Modal */}
+      {script && (
+        <ExecutionModeModal
+          scriptName={script.name}
+          isOpen={executionModeOpen}
+          onClose={() => setExecutionModeOpen(false)}
+          onExecute={handleExecuteScript}
         />
       )}
     </div>
