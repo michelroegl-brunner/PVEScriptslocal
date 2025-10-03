@@ -119,12 +119,12 @@ class DatabaseService {
   getAllInstalledScripts() {
     const stmt = this.db.prepare(`
       SELECT 
-        is.*,
+        inst.*,
         s.name as server_name,
         s.ip as server_ip
-      FROM installed_scripts is
-      LEFT JOIN servers s ON is.server_id = s.id
-      ORDER BY is.installation_date DESC
+      FROM installed_scripts inst
+      LEFT JOIN servers s ON inst.server_id = s.id
+      ORDER BY inst.installation_date DESC
     `);
     return stmt.all();
   }
@@ -135,12 +135,12 @@ class DatabaseService {
   getInstalledScriptById(id) {
     const stmt = this.db.prepare(`
       SELECT 
-        is.*,
+        inst.*,
         s.name as server_name,
         s.ip as server_ip
-      FROM installed_scripts is
-      LEFT JOIN servers s ON is.server_id = s.id
-      WHERE is.id = ?
+      FROM installed_scripts inst
+      LEFT JOIN servers s ON inst.server_id = s.id
+      WHERE inst.id = ?
     `);
     return stmt.get(id);
   }
@@ -151,13 +151,13 @@ class DatabaseService {
   getInstalledScriptsByServer(server_id) {
     const stmt = this.db.prepare(`
       SELECT 
-        is.*,
+        inst.*,
         s.name as server_name,
         s.ip as server_ip
-      FROM installed_scripts is
-      LEFT JOIN servers s ON is.server_id = s.id
-      WHERE is.server_id = ?
-      ORDER BY is.installation_date DESC
+      FROM installed_scripts inst
+      LEFT JOIN servers s ON inst.server_id = s.id
+      WHERE inst.server_id = ?
+      ORDER BY inst.installation_date DESC
     `);
     return stmt.all(server_id);
   }
