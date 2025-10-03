@@ -8,6 +8,8 @@ interface TerminalProps {
   onClose: () => void;
   mode?: 'local' | 'ssh';
   server?: any;
+  isUpdate?: boolean;
+  containerId?: string;
 }
 
 interface TerminalMessage {
@@ -16,7 +18,7 @@ interface TerminalMessage {
   timestamp: number;
 }
 
-export function Terminal({ scriptPath, onClose, mode = 'local', server }: TerminalProps) {
+export function Terminal({ scriptPath, onClose, mode = 'local', server, isUpdate = false, containerId }: TerminalProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isClient, setIsClient] = useState(false);
@@ -161,9 +163,10 @@ export function Terminal({ scriptPath, onClose, mode = 'local', server }: Termin
           scriptPath,
           executionId,
           mode,
-          server
+          server,
+          isUpdate,
+          containerId
         };
-        console.log('Sending WebSocket message:', message);
         ws.send(JSON.stringify(message));
       };
 
@@ -201,7 +204,7 @@ export function Terminal({ scriptPath, onClose, mode = 'local', server }: Termin
         wsRef.current.close();
       }
     };
-  }, [scriptPath, executionId, mode, server]);
+  }, [scriptPath, executionId, mode, server, isUpdate, containerId]);
 
   const handleMessage = (message: TerminalMessage) => {
     if (!xtermRef.current) return;
@@ -248,7 +251,9 @@ export function Terminal({ scriptPath, onClose, mode = 'local', server }: Termin
         scriptPath,
         executionId,
         mode,
-        server
+        server,
+        isUpdate,
+        containerId
       }));
     }
   };

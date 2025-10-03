@@ -3,15 +3,16 @@
 
 import { useState } from 'react';
 import { ScriptsGrid } from './_components/ScriptsGrid';
+import { InstalledScriptsTab } from './_components/InstalledScriptsTab';
 import { ResyncButton } from './_components/ResyncButton';
 import { Terminal } from './_components/Terminal';
 import { SettingsButton } from './_components/SettingsButton';
 
 export default function Home() {
   const [runningScript, setRunningScript] = useState<{ path: string; name: string; mode?: 'local' | 'ssh'; server?: any } | null>(null);
+  const [activeTab, setActiveTab] = useState<'scripts' | 'installed'>('scripts');
 
   const handleRunScript = (scriptPath: string, scriptName: string, mode?: 'local' | 'ssh', server?: any) => {
-    console.log('handleRunScript called with:', { scriptPath, scriptName, mode, server });
     setRunningScript({ path: scriptPath, name: scriptName, mode, server });
   };
 
@@ -32,7 +33,33 @@ export default function Home() {
           </p>
         </div>
 
-       
+        {/* Tab Navigation */}
+        <div className="mb-8">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setActiveTab('scripts')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'scripts'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                📦 Available Scripts
+              </button>
+              <button
+                onClick={() => setActiveTab('installed')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'installed'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                🗂️ Installed Scripts
+              </button>
+            </nav>
+          </div>
+        </div>
 
         {/* Controls */}
         <div className="mb-8">
@@ -54,8 +81,14 @@ export default function Home() {
           </div>
         )}
 
-        {/* Scripts List */}
-        <ScriptsGrid onInstallScript={handleRunScript} />
+        {/* Tab Content */}
+        {activeTab === 'scripts' && (
+          <ScriptsGrid onInstallScript={handleRunScript} />
+        )}
+        
+        {activeTab === 'installed' && (
+          <InstalledScriptsTab />
+        )}
       </div>
     </main>
   );

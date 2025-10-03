@@ -32,7 +32,6 @@ export function ExecutionModeModal({ isOpen, onClose, onExecute, scriptName }: E
         throw new Error('Failed to fetch servers');
       }
       const data = await response.json();
-      console.log('Fetched servers:', data);
       setServers(data as Server[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -47,7 +46,6 @@ export function ExecutionModeModal({ isOpen, onClose, onExecute, scriptName }: E
       return;
     }
     
-    console.log('ExecutionModeModal executing with:', { mode: selectedMode, server: selectedServer });
     onExecute(selectedMode, selectedServer ?? undefined);
     onClose();
   };
@@ -203,7 +201,6 @@ export function ExecutionModeModal({ isOpen, onClose, onExecute, scriptName }: E
                   onChange={(e) => {
                     const serverId = parseInt(e.target.value);
                     const server = servers.find(s => s.id === serverId);
-                    console.log('Server selected:', { serverId, server });
                     setSelectedServer(server ?? null);
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

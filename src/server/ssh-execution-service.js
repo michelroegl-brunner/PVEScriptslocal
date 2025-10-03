@@ -141,6 +141,60 @@ class SSHExecutionService {
     });
   }
 
+  /**
+   * Execute a direct command on a remote server via SSH
+   * @param {Server} server - Server configuration
+   * @param {string} command - Command to execute
+   * @param {Function} onData - Callback for data output
+   * @param {Function} onError - Callback for errors
+   * @param {Function} onExit - Callback for process exit
+   * @returns {Promise<Object>} Process information
+   */
+  async executeCommand(server, command, onData, onError, onExit) {
+    const { ip, user, password } = server;
+    
+    return new Promise((resolve, reject) => {
+      // Use ptySpawn for proper terminal emulation and color support
+      const sshCommand = ptySpawn('sshpass', [
+        '-p', password,
+        'ssh',
+        '-t',
+        '-o', 'ConnectTimeout=10',
+        '-o', 'StrictHostKeyChecking=no',
+        '-o', 'UserKnownHostsFile=/dev/null',
+        '-o', 'LogLevel=ERROR',
+        '-o', 'PasswordAuthentication=yes',
+        '-o', 'PubkeyAuthentication=no',
+        '-o', 'RequestTTY=yes',
+        '-o', 'SetEnv=TERM=xterm-256color',
+        '-o', 'SetEnv=COLUMNS=120',
+        '-o', 'SetEnv=LINES=30',
+        '-o', 'SetEnv=COLORTERM=truecolor',
+        '-o', 'SetEnv=FORCE_COLOR=1',
+        '-o', 'SetEnv=NO_COLOR=0',
+        '-o', 'SetEnv=CLICOLOR=1',
+        `${user}@${ip}`,
+        command
+      ], {
+        name: 'xterm-color',
+        cols: 120,
+        rows: 30,
+        cwd: process.cwd(),
+        env: process.env
+      });
+
+      sshCommand.onData((data) => {
+        onData(data);
+      });
+
+      sshCommand.onExit((e) => {
+        onExit(e.exitCode);
+      });
+
+      resolve({ process: sshCommand });
+    });
+  }
+
 }
 
 // Singleton instance
