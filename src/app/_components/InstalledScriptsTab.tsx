@@ -34,13 +34,6 @@ export function InstalledScriptsTab() {
     }
   });
 
-  // Update script mutation
-  const updateScriptMutation = api.installedScripts.updateScript.useMutation({
-    onSuccess: () => {
-      void refetchScripts();
-    }
-  });
-
 
   const scripts: InstalledScript[] = (scriptsData?.scripts as InstalledScript[]) ?? [];
   const stats = statsData?.stats;
@@ -77,11 +70,15 @@ export function InstalledScriptsTab() {
   };
 
   const handleUpdateScript = (script: InstalledScript) => {
+    if (!script.container_id) {
+      alert('No Container ID available for this script');
+      return;
+    }
+    
     if (confirm(`Are you sure you want to update ${script.script_name}?`)) {
       // Get server info if it's SSH mode
       let server = null;
       if (script.execution_mode === 'ssh' && script.server_id) {
-        // We need to get the server info from the script data
         server = {
           id: script.server_id,
           name: script.server_name,
@@ -91,7 +88,7 @@ export function InstalledScriptsTab() {
       
       setUpdatingScript({
         id: script.id,
-        containerId: script.container_id!,
+        containerId: script.container_id,
         server: server,
         mode: script.execution_mode
       });
@@ -296,9 +293,8 @@ export function InstalledScriptsTab() {
                           <button
                             onClick={() => handleUpdateScript(script)}
                             className="text-blue-600 hover:text-blue-900"
-                            disabled={updateScriptMutation.isPending}
                           >
-                            {updateScriptMutation.isPending ? 'Updating...' : 'Update'}
+                            Update
                           </button>
                         )}
                         <button

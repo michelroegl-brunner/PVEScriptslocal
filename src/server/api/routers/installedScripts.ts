@@ -236,31 +236,5 @@ export const installedScriptsRouter = createTRPCRouter({
           error: error instanceof Error ? error.message : 'Failed to update installation record'
         };
       }
-    }),
-
-  // Update script (run pct enter and update command)
-  updateScript: publicProcedure
-    .input(z.object({
-      id: z.number(),
-      container_id: z.string(),
-      server_id: z.number().optional(),
-      execution_mode: z.enum(['local', 'ssh'])
-    }))
-    .mutation(async ({ input }) => {
-      try {
-        // This will trigger a WebSocket message to start the update process
-        // The actual execution will be handled by the WebSocket server
-        return { 
-          success: true, 
-          message: 'Update command initiated',
-          executionId: `update_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        };
-      } catch (error) {
-        console.error('Error initiating script update:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to initiate script update'
-        };
-      }
     })
 });

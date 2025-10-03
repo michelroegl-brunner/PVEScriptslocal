@@ -30,7 +30,7 @@ export function Terminal({ scriptPath, onClose, mode = 'local', server, isUpdate
   const isConnectingRef = useRef<boolean>(false);
   const hasConnectedRef = useRef<boolean>(false);
 
-  const scriptName = isUpdate ? `Update Container ${containerId}` : (scriptPath.split('/').pop() ?? scriptPath.split('\\').pop() ?? 'Unknown Script');
+  const scriptName = scriptPath.split('/').pop() ?? scriptPath.split('\\').pop() ?? 'Unknown Script';
 
   // Ensure we're on the client side
   useEffect(() => {
@@ -158,19 +158,16 @@ export function Terminal({ scriptPath, onClose, mode = 'local', server, isUpdate
         isConnectingRef.current = false;
         
         // Send start message immediately after connection
-        const message = isUpdate ? {
-          action: 'update',
-          containerId,
-          executionId,
-          mode,
-          server
-        } : {
+        const message = {
           action: 'start',
           scriptPath,
           executionId,
           mode,
-          server
+          server,
+          isUpdate,
+          containerId
         };
+        console.log('Sending WebSocket message:', message);
         ws.send(JSON.stringify(message));
       };
 
@@ -255,7 +252,9 @@ export function Terminal({ scriptPath, onClose, mode = 'local', server, isUpdate
         scriptPath,
         executionId,
         mode,
-        server
+        server,
+        isUpdate,
+        containerId
       }));
     }
   };

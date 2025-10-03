@@ -50,7 +50,6 @@ const handle = app.getRequestHandler();
  * @property {string} [input]
  * @property {string} [mode]
  * @property {ServerInfo} [server]
- * @property {string} [containerId]
  */
 
 class ScriptExecutionHandler {
@@ -168,192 +167,6 @@ class ScriptExecutionHandler {
     }
   }
 
-  /**
-   * Start script update execution
-   * @param {WebSocket} ws - WebSocket connection
-   * @param {string} containerId - Container ID
-   * @param {string} executionId - Execution ID
-   * @param {string} mode - Execution mode ('local' or 'ssh')
-   * @param {Object} server - Server info for SSH
-   */
-  async startScriptUpdate(ws, containerId, executionId, mode = 'local', server = null) {
-    try {
-      if (mode === 'ssh' && server) {
-        await this.startSSHScriptUpdate(ws, containerId, executionId, server);
-      } else {
-        await this.startLocalScriptUpdate(ws, containerId, executionId);
-      }
-    } catch (error) {
-      console.error('Error starting script update:', error);
-      this.sendMessage(ws, {
-        type: 'error',
-        message: `Failed to start script update: ${error.message}`,
-        timestamp: Date.now()
-      });
-    }
-  }
-
-  /**
-   * Start local script update
-   * @param {WebSocket} ws - WebSocket connection
-   * @param {string} containerId - Container ID
-   * @param {string} executionId - Execution ID
-   */
-  async startLocalScriptUpdate(ws, containerId, executionId) {
-    const { spawn } = require('child_process');
-    
-    // Start the update process
-    const updateProcess = spawn('pct', ['enter', containerId, '--', 'update'], {
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-
-    // Store the execution
-    this.activeExecutions.set(executionId, { 
-      process: updateProcess, 
-      ws,
-      installationId: null,
-      outputBuffer: ''
-    });
-
-    // Send start message
-    this.sendMessage(ws, {
-      type: 'start',
-      message: `Starting update for container ${containerId}...`,
-      timestamp: Date.now()
-    });
-
-    // Handle process output
-    updateProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-      this.sendMessage(ws, {
-        type: 'output',
-        data: output,
-        timestamp: Date.now()
-      });
-    });
-
-    updateProcess.stderr.on('data', (data) => {
-      const output = data.toString();
-      this.sendMessage(ws, {
-        type: 'output',
-        data: output,
-        timestamp: Date.now()
-      });
-    });
-
-    // Handle process exit
-    updateProcess.on('exit', (code) => {
-      const isSuccess = code === 0;
-      this.sendMessage(ws, {
-        type: 'end',
-        message: `Update ${isSuccess ? 'completed successfully' : 'failed'} (exit code: ${code})`,
-        timestamp: Date.now()
-      });
-      
-      // Clean up
-      this.activeExecutions.delete(executionId);
-    });
-
-    updateProcess.on('error', (error) => {
-      console.error('Update process error:', error);
-      this.sendMessage(ws, {
-        type: 'error',
-        message: `Update process error: ${error.message}`,
-        timestamp: Date.now()
-      });
-      
-      // Clean up
-      this.activeExecutions.delete(executionId);
-    });
-  }
-
-  /**
-   * Start SSH script update
-   * @param {WebSocket} ws - WebSocket connection
-   * @param {string} containerId - Container ID
-   * @param {string} executionId - Execution ID
-   * @param {Object} server - Server info
-   */
-  async startSSHScriptUpdate(ws, containerId, executionId, server) {
-    const { spawn } = require('child_process');
-    
-    try {
-      // Send start message
-      this.sendMessage(ws, {
-        type: 'start',
-        message: `Starting update for container ${containerId} on ${server.name}...`,
-        timestamp: Date.now()
-      });
-
-      // Execute the update command via SSH using sshpass
-      const sshCommand = `sshpass -p "${server.password}" ssh -o StrictHostKeyChecking=no ${server.user}@${server.ip} "pct enter ${containerId} -- update"`;
-      
-      const updateProcess = spawn('bash', ['-c', sshCommand], {
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-
-      // Store the execution
-      this.activeExecutions.set(executionId, { 
-        process: updateProcess, 
-        ws,
-        installationId: null,
-        outputBuffer: ''
-      });
-
-      // Handle process output
-      updateProcess.stdout.on('data', (data) => {
-        const output = data.toString();
-        this.sendMessage(ws, {
-          type: 'output',
-          data: output,
-          timestamp: Date.now()
-        });
-      });
-
-      updateProcess.stderr.on('data', (data) => {
-        const output = data.toString();
-        this.sendMessage(ws, {
-          type: 'output',
-          data: output,
-          timestamp: Date.now()
-        });
-      });
-
-      // Handle process exit
-      updateProcess.on('exit', (code) => {
-        const isSuccess = code === 0;
-        this.sendMessage(ws, {
-          type: 'end',
-          message: `Update ${isSuccess ? 'completed successfully' : 'failed'} (exit code: ${code})`,
-          timestamp: Date.now()
-        });
-        
-        // Clean up
-        this.activeExecutions.delete(executionId);
-      });
-
-      updateProcess.on('error', (error) => {
-        console.error('SSH update process error:', error);
-        this.sendMessage(ws, {
-          type: 'error',
-          message: `SSH update process error: ${error.message}`,
-          timestamp: Date.now()
-        });
-        
-        // Clean up
-        this.activeExecutions.delete(executionId);
-      });
-
-    } catch (error) {
-      console.error('SSH update error:', error);
-      this.sendMessage(ws, {
-        type: 'error',
-        message: `SSH update error: ${error.message}`,
-        timestamp: Date.now()
-      });
-    }
-  }
-
   setupWebSocket() {
     this.wss.on('connection', (ws, request) => {
       
@@ -394,7 +207,7 @@ class ScriptExecutionHandler {
    * @param {WebSocketMessage} message
    */
   async handleMessage(ws, message) {
-    const { action, scriptPath, executionId, input, mode, server, containerId } = message;
+    const { action, scriptPath, executionId, input, mode, server, isUpdate, containerId } = message;
     
     // Debug logging
     console.log('WebSocket message received:', { action, scriptPath, executionId, mode, server: server ? { name: server.name, ip: server.ip } : null });
@@ -403,7 +216,11 @@ class ScriptExecutionHandler {
     switch (action) {
       case 'start':
         if (scriptPath && executionId) {
-          await this.startScriptExecution(ws, scriptPath, executionId, mode, server);
+          if (isUpdate && containerId) {
+            await this.startUpdateExecution(ws, containerId, executionId, mode, server);
+          } else {
+            await this.startScriptExecution(ws, scriptPath, executionId, mode, server);
+          }
         } else {
           this.sendMessage(ws, {
             type: 'error',
@@ -422,18 +239,6 @@ class ScriptExecutionHandler {
       case 'input':
         if (executionId && input !== undefined) {
           this.sendInputToProcess(executionId, input);
-        }
-        break;
-
-      case 'update':
-        if (executionId && containerId) {
-          await this.startScriptUpdate(ws, containerId, executionId, mode, server);
-        } else {
-          this.sendMessage(ws, {
-            type: 'error',
-            data: 'Missing executionId or containerId for update',
-            timestamp: Date.now()
-          });
         }
         break;
 
@@ -770,6 +575,139 @@ class ScriptExecutionHandler {
         execution.process.kill('SIGTERM');
         this.activeExecutions.delete(executionId);
       }
+    }
+  }
+
+  /**
+   * Start update execution (pct enter + update command)
+   * @param {ExtendedWebSocket} ws
+   * @param {string} containerId
+   * @param {string} executionId
+   * @param {string} mode
+   * @param {ServerInfo|null} server
+   */
+  async startUpdateExecution(ws, containerId, executionId, mode = 'local', server = null) {
+    try {
+      console.log('Starting update execution for container:', containerId);
+      
+      // Send start message
+      this.sendMessage(ws, {
+        type: 'start',
+        data: `Starting update for container ${containerId}...`,
+        timestamp: Date.now()
+      });
+
+      if (mode === 'ssh' && server) {
+        await this.startSSHUpdateExecution(ws, containerId, executionId, server);
+      } else {
+        await this.startLocalUpdateExecution(ws, containerId, executionId);
+      }
+
+    } catch (error) {
+      this.sendMessage(ws, {
+        type: 'error',
+        data: `Failed to start update: ${error instanceof Error ? error.message : String(error)}`,
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  /**
+   * Start local update execution
+   * @param {ExtendedWebSocket} ws
+   * @param {string} containerId
+   * @param {string} executionId
+   */
+  async startLocalUpdateExecution(ws, containerId, executionId) {
+    const { spawn } = await import('node-pty');
+    
+    // Create a shell process that will run pct enter and then update
+    const childProcess = spawn('bash', ['-c', `pct enter ${containerId} -c "update"`], {
+      name: 'xterm-color',
+      cols: 80,
+      rows: 24,
+      cwd: process.cwd(),
+      env: process.env
+    });
+
+    // Store the execution
+    this.activeExecutions.set(executionId, { 
+      process: childProcess, 
+      ws
+    });
+
+    // Handle pty data
+    childProcess.onData((data) => {
+      this.sendMessage(ws, {
+        type: 'output',
+        data: data.toString(),
+        timestamp: Date.now()
+      });
+    });
+
+    // Handle process exit
+    childProcess.onExit((e) => {
+      this.sendMessage(ws, {
+        type: 'end',
+        data: `Update completed with exit code: ${e.exitCode}`,
+        timestamp: Date.now()
+      });
+      
+      this.activeExecutions.delete(executionId);
+    });
+  }
+
+  /**
+   * Start SSH update execution
+   * @param {ExtendedWebSocket} ws
+   * @param {string} containerId
+   * @param {string} executionId
+   * @param {ServerInfo} server
+   */
+  async startSSHUpdateExecution(ws, containerId, executionId, server) {
+    const sshService = getSSHExecutionService();
+    
+    try {
+      const execution = await sshService.executeScript(
+        server,
+        `pct enter ${containerId} -c "update"`,
+        (data) => {
+          this.sendMessage(ws, {
+            type: 'output',
+            data: data,
+            timestamp: Date.now()
+          });
+        },
+        (error) => {
+          this.sendMessage(ws, {
+            type: 'error',
+            data: error,
+            timestamp: Date.now()
+          });
+        },
+        (code) => {
+          this.sendMessage(ws, {
+            type: 'end',
+            data: `Update completed with exit code: ${code}`,
+            timestamp: Date.now()
+          });
+          
+          this.activeExecutions.delete(executionId);
+        }
+      );
+
+      // Store the execution
+      this.activeExecutions.set(executionId, { 
+        process: execution.process, 
+        ws
+      });
+
+    } catch (error) {
+      this.sendMessage(ws, {
+        type: 'error',
+        data: `SSH execution failed: ${error instanceof Error ? error.message : String(error)}`,
+        timestamp: Date.now()
+      });
     }
   }
 }
