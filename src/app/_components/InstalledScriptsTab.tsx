@@ -21,6 +21,8 @@ export function InstalledScriptsTab() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'failed' | 'in_progress'>('all');
   const [serverFilter, setServerFilter] = useState<string>('all');
   const [selectedScript, setSelectedScript] = useState<InstalledScript | null>(null);
+  const [editingContainerId, setEditingContainerId] = useState<number | null>(null);
+  const [newContainerId, setNewContainerId] = useState<string>('');
 
   // Fetch installed scripts
   const { data: scriptsData, refetch: refetchScripts, isLoading } = api.installedScripts.getAllInstalledScripts.useQuery();
@@ -30,6 +32,15 @@ export function InstalledScriptsTab() {
   const deleteScriptMutation = api.installedScripts.deleteInstalledScript.useMutation({
     onSuccess: () => {
       void refetchScripts();
+    }
+  });
+
+  // Update script mutation
+  const updateScriptMutation = api.installedScripts.updateInstalledScript.useMutation({
+    onSuccess: () => {
+      void refetchScripts();
+      setEditingContainerId(null);
+      setNewContainerId('');
     }
   });
 
@@ -65,6 +76,25 @@ export function InstalledScriptsTab() {
     if (confirm('Are you sure you want to delete this installation record?')) {
       void deleteScriptMutation.mutate({ id });
     }
+  };
+
+  const handleEditContainerId = (script: InstalledScript) => {
+    setEditingContainerId(script.id);
+    setNewContainerId(script.container_id || '');
+  };
+
+  const handleSaveContainerId = (id: number) => {
+    if (newContainerId.trim()) {
+      void updateScriptMutation.mutate({
+        id,
+        container_id: newContainerId.trim()
+      });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingContainerId(null);
+    setNewContainerId('');
   };
 
   const formatDate = (dateString: string) => {
@@ -211,10 +241,45 @@ export function InstalledScriptsTab() {
                       <div className="text-sm text-gray-500">{script.script_path}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {script.container_id ? (
-                        <span className="text-sm font-mono text-gray-900">{String(script.container_id)}</span>
+                      {editingContainerId === script.id ? (
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="text"
+                            value={newContainerId}
+                            onChange={(e) => setNewContainerId(e.target.value)}
+                            className="text-sm font-mono border border-gray-300 rounded px-2 py-1 w-20"
+                            placeholder="ID"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSaveContainerId(script.id)}
+                            className="text-green-600 hover:text-green-800 text-xs"
+                            disabled={updateScriptMutation.isPending}
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="text-gray-500 hover:text-gray-700 text-xs"
+                          >
+                            ✕
+                          </button>
+                        </div>
                       ) : (
-                        <span className="text-sm text-gray-400">-</span>
+                        <div className="flex items-center space-x-2">
+                          {script.container_id ? (
+                            <span className="text-sm font-mono text-gray-900">{String(script.container_id)}</span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                          <button
+                            onClick={() => handleEditContainerId(script)}
+                            className="text-blue-600 hover:text-blue-800 text-xs"
+                            title="Edit Container ID"
+                          >
+                            ✏️
+                          </button>
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

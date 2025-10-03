@@ -72,20 +72,53 @@ class ScriptExecutionHandler {
    * @returns {string|null} - Container ID if found, null otherwise
    */
   parseContainerId(output) {
-    // Look for patterns like: 🆔 Container ID: 149 or Container ID: 149
+    // Look for various patterns that Proxmox scripts might use
     const patterns = [
+      // Standard patterns
       /🆔\s*Container\s*ID:\s*(\d+)/i,
       /Container\s*ID:\s*(\d+)/i,
       /CT\s*ID:\s*(\d+)/i,
-      /Container\s*(\d+)/i
+      /Container\s*(\d+)/i,
+      
+      // Alternative patterns
+      /CT\s*(\d+)/i,
+      /Container\s*created\s*with\s*ID\s*(\d+)/i,
+      /Created\s*container\s*(\d+)/i,
+      /Container\s*(\d+)\s*created/i,
+      /ID:\s*(\d+)/i,
+      
+      // Patterns with different spacing and punctuation
+      /Container\s*ID\s*:\s*(\d+)/i,
+      /CT\s*ID\s*:\s*(\d+)/i,
+      /Container\s*#\s*(\d+)/i,
+      /CT\s*#\s*(\d+)/i,
+      
+      // Patterns that might appear in success messages
+      /Successfully\s*created\s*container\s*(\d+)/i,
+      /Container\s*(\d+)\s*is\s*ready/i,
+      /Container\s*(\d+)\s*started/i,
+      
+      // Generic number patterns that might be container IDs
+      /(?:^|\s)(\d{3,4})(?:\s|$)/m, // 3-4 digit numbers (common for container IDs)
     ];
 
     for (const pattern of patterns) {
       const match = output.match(pattern);
       if (match && match[1]) {
-        return match[1];
+        const containerId = match[1];
+        // Additional validation: container IDs are typically 3-4 digits
+        if (containerId.length >= 3 && containerId.length <= 4) {
+          console.log(`Container ID detected with pattern: ${pattern} -> ${containerId}`);
+          return containerId;
+        }
       }
     }
+    
+    // Debug: log a sample of the output to help identify patterns
+    if (output.length > 0) {
+      console.log('No Container ID found in output sample:', output.substring(0, 200));
+    }
+    
     return null;
   }
 
