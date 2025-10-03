@@ -171,7 +171,6 @@ export function Terminal({ scriptPath, onClose, mode = 'local', server, isUpdate
           mode,
           server
         };
-        console.log('Sending WebSocket message:', message);
         ws.send(JSON.stringify(message));
       };
 

@@ -50,6 +50,7 @@ const handle = app.getRequestHandler();
  * @property {string} [input]
  * @property {string} [mode]
  * @property {ServerInfo} [server]
+ * @property {string} [containerId]
  */
 
 class ScriptExecutionHandler {
@@ -393,7 +394,7 @@ class ScriptExecutionHandler {
    * @param {WebSocketMessage} message
    */
   async handleMessage(ws, message) {
-    const { action, scriptPath, executionId, input, mode, server } = message;
+    const { action, scriptPath, executionId, input, mode, server, containerId } = message;
     
     // Debug logging
     console.log('WebSocket message received:', { action, scriptPath, executionId, mode, server: server ? { name: server.name, ip: server.ip } : null });
