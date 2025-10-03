@@ -69,7 +69,7 @@ export function InstalledScriptsTab() {
     }
   };
 
-  const handleUpdateScript = (script: InstalledScript) => {
+  const handleUpdateScript = async (script: InstalledScript) => {
     if (!script.container_id) {
       alert('No Container ID available for this script');
       return;
@@ -79,11 +79,22 @@ export function InstalledScriptsTab() {
       // Get server info if it's SSH mode
       let server = null;
       if (script.execution_mode === 'ssh' && script.server_id) {
-        server = {
-          id: script.server_id,
-          name: script.server_name,
-          ip: script.server_ip
-        };
+        try {
+          // Fetch full server details including credentials
+          const serverResponse = await fetch(`/api/trpc/servers.getServerById?input=${encodeURIComponent(JSON.stringify({ id: script.server_id }))}`);
+          const serverData = await serverResponse.json();
+          
+          if (serverData.result?.data?.json?.success && serverData.result.data.json.server) {
+            server = serverData.result.data.json.server;
+          } else {
+            alert('Failed to fetch server details. Please check server configuration.');
+            return;
+          }
+        } catch (error) {
+          console.error('Error fetching server details:', error);
+          alert('Failed to fetch server details. Please check server configuration.');
+          return;
+        }
       }
       
       setUpdatingScript({

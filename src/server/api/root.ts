@@ -1,5 +1,6 @@
 import { scriptsRouter } from "~/server/api/routers/scripts";
 import { installedScriptsRouter } from "~/server/api/routers/installedScripts";
+import { serversRouter } from "~/server/api/routers/servers";
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 
 /**
@@ -10,6 +11,7 @@ import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 export const appRouter = createTRPCRouter({
   scripts: scriptsRouter,
   installedScripts: installedScriptsRouter,
+  servers: serversRouter,
 });
 
 // export type definition of API
