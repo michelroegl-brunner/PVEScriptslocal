@@ -668,7 +668,7 @@ class ScriptExecutionHandler {
     const sshService = getSSHExecutionService();
     
     try {
-      const execution = await sshService.executeScript(
+      const execution = await sshService.executeCommand(
         server,
         `pct enter ${containerId} -c "update"`,
         (data) => {
