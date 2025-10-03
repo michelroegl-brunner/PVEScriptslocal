@@ -29,23 +29,21 @@
     "@trpc/server": "^11.0.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/ws": "^8.18.1",
-    "@xterm/addon-attach": "^0.11.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/xterm": "^5.5.0",
+    "better-sqlite3": "^9.6.0",
     "next": "^15.5.3",
     "node-pty": "^1.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-syntax-highlighter": "^15.6.6",
+    "refractor": "^5.0.0",
     "server-only": "^0.0.1",
-    "simple-git": "^3.28.0",
     "strip-ansi": "^7.1.2",
     "superjson": "^2.2.1",
     "ws": "^8.18.3",
-    "xterm": "^5.3.0",
-    "zod": "^3.24.2",
-    "better-sqlite3": "^9.6.0"
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
@@ -53,6 +51,7 @@
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^24.3.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -68,11 +67,13 @@
     "tailwindcss": "^4.0.15",
     "typescript": "^5.8.2",
     "typescript-eslint": "^8.27.0",
-    "vitest": "^3.2.4",
-    "@types/better-sqlite3": "^7.6.8"
+    "vitest": "^3.2.4"
   },
   "ct3aMetadata": {
     "initVersion": "7.39.3"
   },
-  "packageManager": "npm@10.9.3"
+  "packageManager": "npm@10.9.3",
+  "overrides": {
+    "prismjs": "^1.30.0"
+  }
 }
