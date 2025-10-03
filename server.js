@@ -7,6 +7,7 @@ import { join, resolve } from 'path';
 import stripAnsi from 'strip-ansi';
 import { spawn as ptySpawn } from 'node-pty';
 import { getSSHExecutionService } from './src/server/ssh-execution-service.js';
+import { getDatabase } from './src/server/database.js';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = '0.0.0.0';
@@ -32,6 +33,7 @@ const handle = app.getRequestHandler();
  * @property {string} ip
  * @property {string} user
  * @property {string} password
+ * @property {number} [id]
  */
 
 /**
@@ -60,7 +62,70 @@ class ScriptExecutionHandler {
       path: '/ws/script-execution'
     });
     this.activeExecutions = new Map();
+    this.db = getDatabase();
     this.setupWebSocket();
+  }
+
+  /**
+   * Parse Container ID from terminal output
+   * @param {string} output - Terminal output to parse
+   * @returns {string|null} - Container ID if found, null otherwise
+   */
+  parseContainerId(output) {
+    // Look for patterns like: 🆔 Container ID: 149 or Container ID: 149
+    const patterns = [
+      /🆔\s*Container\s*ID:\s*(\d+)/i,
+      /Container\s*ID:\s*(\d+)/i,
+      /CT\s*ID:\s*(\d+)/i,
+      /Container\s*(\d+)/i
+    ];
+
+    for (const pattern of patterns) {
+      const match = output.match(pattern);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Create installation record
+   * @param {string} scriptName - Name of the script
+   * @param {string} scriptPath - Path to the script
+   * @param {string} executionMode - 'local' or 'ssh'
+   * @param {number|null} serverId - Server ID for SSH executions
+   * @returns {number|null} - Installation record ID
+   */
+  createInstallationRecord(scriptName, scriptPath, executionMode, serverId = null) {
+    try {
+      const result = this.db.createInstalledScript({
+        script_name: scriptName,
+        script_path: scriptPath,
+        container_id: undefined,
+        server_id: serverId ?? undefined,
+        execution_mode: executionMode,
+        status: 'in_progress',
+        output_log: ''
+      });
+      return Number(result.lastInsertRowid);
+    } catch (error) {
+      console.error('Error creating installation record:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Update installation record
+   * @param {number} installationId - Installation record ID
+   * @param {Object} updateData - Data to update
+   */
+  updateInstallationRecord(installationId, updateData) {
+    try {
+      this.db.updateInstalledScript(installationId, updateData);
+    } catch (error) {
+      console.error('Error updating installation record:', error);
+    }
   }
 
   setupWebSocket() {
@@ -151,6 +216,9 @@ class ScriptExecutionHandler {
    * @param {ServerInfo|null} server
    */
   async startScriptExecution(ws, scriptPath, executionId, mode = 'local', server = null) {
+    /** @type {number|null} */
+    let installationId = null;
+    
     try {
       // Debug logging
       console.log('startScriptExecution called with:', { mode, server: server ? { name: server.name, ip: server.ip } : null });
@@ -166,10 +234,21 @@ class ScriptExecutionHandler {
         return;
       }
 
+      // Extract script name from path
+      const scriptName = scriptPath.split('/').pop() ?? scriptPath.split('\\').pop() ?? 'Unknown Script';
+      
+      // Create installation record
+      const serverId = server ? (server.id ?? null) : null;
+      installationId = this.createInstallationRecord(scriptName, scriptPath, mode, serverId);
+      
+      if (!installationId) {
+        console.error('Failed to create installation record');
+      }
+
       // Handle SSH execution
       if (mode === 'ssh' && server) {
         console.log('Starting SSH execution...');
-        await this.startSSHScriptExecution(ws, scriptPath, executionId, server);
+        await this.startSSHScriptExecution(ws, scriptPath, executionId, server, installationId);
         return;
       }
       
@@ -189,6 +268,11 @@ class ScriptExecutionHandler {
           data: 'Script path is not within the allowed scripts directory',
           timestamp: Date.now()
         });
+        
+        // Update installation record with failure
+        if (installationId) {
+          this.updateInstallationRecord(installationId, { status: 'failed' });
+        }
         return;
       }
 
@@ -209,8 +293,13 @@ class ScriptExecutionHandler {
 
       // pty handles encoding automatically
       
-      // Store the execution
-      this.activeExecutions.set(executionId, { process: childProcess, ws });
+      // Store the execution with installation ID
+      this.activeExecutions.set(executionId, { 
+        process: childProcess, 
+        ws, 
+        installationId,
+        outputBuffer: ''
+      });
 
       // Send start message
       this.sendMessage(ws, {
@@ -221,15 +310,45 @@ class ScriptExecutionHandler {
 
       // Handle pty data (both stdout and stderr combined)
       childProcess.onData((data) => {
+        const output = data.toString();
+        
+        // Store output in buffer for logging
+        const execution = this.activeExecutions.get(executionId);
+        if (execution) {
+          execution.outputBuffer += output;
+          // Keep only last 1000 characters to avoid memory issues
+          if (execution.outputBuffer.length > 1000) {
+            execution.outputBuffer = execution.outputBuffer.slice(-1000);
+          }
+        }
+        
+        // Parse for Container ID
+        const containerId = this.parseContainerId(output);
+        if (containerId && installationId) {
+          console.log(`Container ID detected: ${containerId}`);
+          this.updateInstallationRecord(installationId, { container_id: containerId });
+        }
+        
         this.sendMessage(ws, {
           type: 'output',
-          data: data.toString(),
+          data: output,
           timestamp: Date.now()
         });
       });
 
       // Handle process exit
       childProcess.onExit((e) => {
+        const execution = this.activeExecutions.get(executionId);
+        const isSuccess = e.exitCode === 0;
+        
+        // Update installation record with final status and output
+        if (installationId && execution) {
+          this.updateInstallationRecord(installationId, {
+            status: isSuccess ? 'success' : 'failed',
+            output_log: execution.outputBuffer
+          });
+        }
+        
         this.sendMessage(ws, {
           type: 'end',
           data: `Script execution finished with code: ${e.exitCode}, signal: ${e.signal}`,
@@ -246,6 +365,11 @@ class ScriptExecutionHandler {
         data: `Failed to start script: ${error instanceof Error ? error.message : String(error)}`,
         timestamp: Date.now()
       });
+      
+      // Update installation record with failure
+      if (installationId) {
+        this.updateInstallationRecord(installationId, { status: 'failed' });
+      }
     }
   }
 
@@ -255,8 +379,9 @@ class ScriptExecutionHandler {
    * @param {string} scriptPath
    * @param {string} executionId
    * @param {ServerInfo} server
+   * @param {number|null} installationId
    */
-  async startSSHScriptExecution(ws, scriptPath, executionId, server) {
+  async startSSHScriptExecution(ws, scriptPath, executionId, server, installationId = null) {
     console.log('startSSHScriptExecution called with server:', server);
     const sshService = getSSHExecutionService();
 
@@ -272,6 +397,23 @@ class ScriptExecutionHandler {
         server,
         scriptPath,
         /** @param {string} data */ (data) => {
+          // Store output in buffer for logging
+          const exec = this.activeExecutions.get(executionId);
+          if (exec) {
+            exec.outputBuffer += data;
+            // Keep only last 1000 characters to avoid memory issues
+            if (exec.outputBuffer.length > 1000) {
+              exec.outputBuffer = exec.outputBuffer.slice(-1000);
+            }
+          }
+          
+          // Parse for Container ID
+          const containerId = this.parseContainerId(data);
+          if (containerId && installationId) {
+            console.log(`Container ID detected: ${containerId}`);
+            this.updateInstallationRecord(installationId, { container_id: containerId });
+          }
+          
           // Handle data output
           this.sendMessage(ws, {
             type: 'output',
@@ -280,6 +422,16 @@ class ScriptExecutionHandler {
           });
         },
         /** @param {string} error */ (error) => {
+          // Store error in buffer for logging
+          const exec = this.activeExecutions.get(executionId);
+          if (exec) {
+            exec.outputBuffer += error;
+            // Keep only last 1000 characters to avoid memory issues
+            if (exec.outputBuffer.length > 1000) {
+              exec.outputBuffer = exec.outputBuffer.slice(-1000);
+            }
+          }
+          
           // Handle errors
           this.sendMessage(ws, {
             type: 'error',
@@ -288,6 +440,17 @@ class ScriptExecutionHandler {
           });
         },
         /** @param {number} code */ (code) => {
+          const exec = this.activeExecutions.get(executionId);
+          const isSuccess = code === 0;
+          
+          // Update installation record with final status and output
+          if (installationId && exec) {
+            this.updateInstallationRecord(installationId, {
+              status: isSuccess ? 'success' : 'failed',
+              output_log: exec.outputBuffer
+            });
+          }
+          
           // Handle process exit
           this.sendMessage(ws, {
             type: 'end',
@@ -300,8 +463,13 @@ class ScriptExecutionHandler {
         }
       ));
 
-      // Store the execution
-      this.activeExecutions.set(executionId, { process: execution.process, ws });
+      // Store the execution with installation ID
+      this.activeExecutions.set(executionId, { 
+        process: execution.process, 
+        ws, 
+        installationId,
+        outputBuffer: ''
+      });
 
     } catch (error) {
       this.sendMessage(ws, {
@@ -309,6 +477,11 @@ class ScriptExecutionHandler {
         data: `Failed to start SSH execution: ${error instanceof Error ? error.message : String(error)}`,
         timestamp: Date.now()
       });
+      
+      // Update installation record with failure
+      if (installationId) {
+        this.updateInstallationRecord(installationId, { status: 'failed' });
+      }
     }
   }
 
