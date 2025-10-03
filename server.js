@@ -50,6 +50,8 @@ const handle = app.getRequestHandler();
  * @property {string} [input]
  * @property {string} [mode]
  * @property {ServerInfo} [server]
+ * @property {boolean} [isUpdate]
+ * @property {string} [containerId]
  */
 
 class ScriptExecutionHandler {
@@ -660,6 +662,7 @@ class ScriptExecutionHandler {
       const execution = await sshService.executeCommand(
         server,
         `pct enter ${containerId}`,
+        /** @param {string} data */
         (data) => {
           this.sendMessage(ws, {
             type: 'output',
@@ -667,6 +670,7 @@ class ScriptExecutionHandler {
             timestamp: Date.now()
           });
         },
+        /** @param {string} error */
         (error) => {
           this.sendMessage(ws, {
             type: 'error',
@@ -674,6 +678,7 @@ class ScriptExecutionHandler {
             timestamp: Date.now()
           });
         },
+        /** @param {number} code */
         (code) => {
           this.sendMessage(ws, {
             type: 'end',
@@ -687,13 +692,13 @@ class ScriptExecutionHandler {
 
       // Store the execution
       this.activeExecutions.set(executionId, { 
-        process: execution.process, 
+        process: /** @type {any} */ (execution).process, 
         ws
       });
 
       // Send the update command after a delay to ensure we're in the container
       setTimeout(() => {
-        execution.process.write('update\n');
+        /** @type {any} */ (execution).process.write('update\n');
       }, 4000);
 
     } catch (error) {

@@ -202,39 +202,5 @@ export const installedScriptsRouter = createTRPCRouter({
           stats: null
         };
       }
-    }),
-
-  // Update installed script record
-  updateInstalledScript: publicProcedure
-    .input(z.object({ 
-      id: z.number(),
-      container_id: z.string().optional(),
-      status: z.enum(['in_progress', 'success', 'failed']).optional(),
-      output_log: z.string().optional()
-    }))
-    .mutation(async ({ input }) => {
-      try {
-        const db = getDatabase();
-        const updateData: any = {};
-        
-        if (input.container_id !== undefined) {
-          updateData.container_id = input.container_id;
-        }
-        if (input.status !== undefined) {
-          updateData.status = input.status;
-        }
-        if (input.output_log !== undefined) {
-          updateData.output_log = input.output_log;
-        }
-        
-        db.updateInstalledScript(input.id, updateData);
-        return { success: true, message: 'Installation record updated successfully' };
-      } catch (error) {
-        console.error('Error updating installation record:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Failed to update installation record'
-        };
-      }
     })
 });

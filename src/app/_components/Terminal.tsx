@@ -204,7 +204,7 @@ export function Terminal({ scriptPath, onClose, mode = 'local', server, isUpdate
         wsRef.current.close();
       }
     };
-  }, [scriptPath, executionId, mode, server]);
+  }, [scriptPath, executionId, mode, server, isUpdate, containerId]);
 
   const handleMessage = (message: TerminalMessage) => {
     if (!xtermRef.current) return;
