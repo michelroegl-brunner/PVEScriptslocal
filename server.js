@@ -645,10 +645,10 @@ class ScriptExecutionHandler {
       });
     });
 
-    // Send the update command after a short delay to ensure we're in the container
+    // Send the update command after a delay to ensure we're in the container
     setTimeout(() => {
       childProcess.write('update\n');
-    }, 1000);
+    }, 4000);
 
     // Handle process exit
     childProcess.onExit((e) => {
@@ -707,10 +707,10 @@ class ScriptExecutionHandler {
         ws
       });
 
-      // Send the update command after a short delay to ensure we're in the container
+      // Send the update command after a delay to ensure we're in the container
       setTimeout(() => {
         execution.process.write('update\n');
-      }, 1000);
+      }, 4000);
 
     } catch (error) {
       this.sendMessage(ws, {
