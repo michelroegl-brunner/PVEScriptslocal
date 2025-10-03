@@ -177,9 +177,7 @@ class ScriptExecutionHandler {
       ws.on('message', (data) => {
         try {
           const rawMessage = data.toString();
-          console.log('Raw WebSocket message received:', rawMessage);
           const message = JSON.parse(rawMessage);
-          console.log('Parsed WebSocket message:', message);
           this.handleMessage(/** @type {ExtendedWebSocket} */ (ws), message);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -208,10 +206,6 @@ class ScriptExecutionHandler {
    */
   async handleMessage(ws, message) {
     const { action, scriptPath, executionId, input, mode, server, isUpdate, containerId } = message;
-    
-    // Debug logging
-    console.log('WebSocket message received:', { action, scriptPath, executionId, mode, server: server ? { name: server.name, ip: server.ip } : null });
-    console.log('Full message object:', JSON.stringify(message, null, 2));
 
     switch (action) {
       case 'start':
@@ -263,9 +257,6 @@ class ScriptExecutionHandler {
     let installationId = null;
     
     try {
-      // Debug logging
-      console.log('startScriptExecution called with:', { mode, server: server ? { name: server.name, ip: server.ip } : null });
-      console.log('Full server object:', JSON.stringify(server, null, 2));
       
       // Check if execution is already running
       if (this.activeExecutions.has(executionId)) {
@@ -290,16 +281,13 @@ class ScriptExecutionHandler {
 
       // Handle SSH execution
       if (mode === 'ssh' && server) {
-        console.log('Starting SSH execution...');
         await this.startSSHScriptExecution(ws, scriptPath, executionId, server, installationId);
         return;
       }
       
       if (mode === 'ssh' && !server) {
-        console.log('SSH mode requested but no server provided, falling back to local execution');
+        // SSH mode requested but no server provided, falling back to local execution
       }
-      
-      console.log('Starting local execution...');
 
       // Basic validation for local execution
       const scriptsDir = join(process.cwd(), 'scripts');
@@ -368,7 +356,6 @@ class ScriptExecutionHandler {
         // Parse for Container ID
         const containerId = this.parseContainerId(output);
         if (containerId && installationId) {
-          console.log(`Container ID detected: ${containerId}`);
           this.updateInstallationRecord(installationId, { container_id: containerId });
         }
         
@@ -425,7 +412,6 @@ class ScriptExecutionHandler {
    * @param {number|null} installationId
    */
   async startSSHScriptExecution(ws, scriptPath, executionId, server, installationId = null) {
-    console.log('startSSHScriptExecution called with server:', server);
     const sshService = getSSHExecutionService();
 
     // Send start message
@@ -453,7 +439,6 @@ class ScriptExecutionHandler {
           // Parse for Container ID
           const containerId = this.parseContainerId(data);
           if (containerId && installationId) {
-            console.log(`Container ID detected: ${containerId}`);
             this.updateInstallationRecord(installationId, { container_id: containerId });
           }
           
@@ -588,7 +573,6 @@ class ScriptExecutionHandler {
    */
   async startUpdateExecution(ws, containerId, executionId, mode = 'local', server = null) {
     try {
-      console.log('Starting update execution for container:', containerId);
       
       // Send start message
       this.sendMessage(ws, {

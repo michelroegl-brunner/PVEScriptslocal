@@ -13,7 +13,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'scripts' | 'installed'>('scripts');
 
   const handleRunScript = (scriptPath: string, scriptName: string, mode?: 'local' | 'ssh', server?: any) => {
-    console.log('handleRunScript called with:', { scriptPath, scriptName, mode, server });
     setRunningScript({ path: scriptPath, name: scriptName, mode, server });
   };
 
