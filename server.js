@@ -622,7 +622,7 @@ class ScriptExecutionHandler {
     const { spawn } = await import('node-pty');
     
     // Create a shell process that will run pct enter and then update
-    const childProcess = spawn('bash', ['-c', `pct enter ${containerId} -c "update"`], {
+    const childProcess = spawn('bash', ['-c', `pct enter ${containerId}`], {
       name: 'xterm-color',
       cols: 80,
       rows: 24,
@@ -644,6 +644,11 @@ class ScriptExecutionHandler {
         timestamp: Date.now()
       });
     });
+
+    // Send the update command after a short delay to ensure we're in the container
+    setTimeout(() => {
+      childProcess.write('update\n');
+    }, 1000);
 
     // Handle process exit
     childProcess.onExit((e) => {
@@ -670,7 +675,7 @@ class ScriptExecutionHandler {
     try {
       const execution = await sshService.executeCommand(
         server,
-        `pct enter ${containerId} -c "update"`,
+        `pct enter ${containerId}`,
         (data) => {
           this.sendMessage(ws, {
             type: 'output',
@@ -701,6 +706,11 @@ class ScriptExecutionHandler {
         process: execution.process, 
         ws
       });
+
+      // Send the update command after a short delay to ensure we're in the container
+      setTimeout(() => {
+        execution.process.write('update\n');
+      }, 1000);
 
     } catch (error) {
       this.sendMessage(ws, {
