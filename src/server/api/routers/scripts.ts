@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { scriptManager } from "~/server/lib/scripts";
-import { gitManager } from "~/server/lib/git";
 import { githubJsonService } from "~/server/services/githubJsonService";
 import { localScriptsService } from "~/server/services/localScripts";
 import { scriptDownloaderService } from "~/server/services/scriptDownloader";
@@ -27,27 +26,7 @@ export const scriptsRouter = createTRPCRouter({
       };
     }),
 
-  // Get repository status
-  getRepoStatus: publicProcedure
-    .query(async () => {
-      const status = await gitManager.getStatus();
-      return status;
-    }),
-
-  // Update repository
-  updateRepo: publicProcedure
-    .mutation(async () => {
-      const result = await gitManager.pullUpdates();
-      return result;
-    }),
-
-  // Full update repository (git pull, npm install, build)
-  fullUpdateRepo: publicProcedure
-    .mutation(async () => {
-      const result = await gitManager.fullUpdate();
-      return result;
-    }),
-
+ 
   // Get script content for viewing
   getScriptContent: publicProcedure
     .input(z.object({ path: z.string() }))

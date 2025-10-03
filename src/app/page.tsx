@@ -33,6 +33,14 @@ export default function Home() {
           </p>
         </div>
 
+        {/* Controls */}
+        <div className="mb-8">
+          <div className="flex items-left pr-4 mb-6">
+            <SettingsButton />
+            <ResyncButton />
+          </div>
+        </div>
+
         {/* Tab Navigation */}
         <div className="mb-8">
           <div className="border-b border-gray-200">
@@ -61,13 +69,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Controls */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <SettingsButton />
-            <ResyncButton />
-          </div>
-        </div>
+
 
         {/* Running Script Terminal */}
         {runningScript && (

@@ -79,11 +79,9 @@ export function ExecutionModeModal({ isOpen, onClose, onExecute, scriptName }: E
         <div className="p-6">
           <div className="mb-6">
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              How would you like to execute &quot;{scriptName}&quot;?
+              Where would you like to execute &quot;{scriptName}&quot;?
             </h3>
-            <p className="text-gray-600 text-sm">
-              Choose between local execution or running the script on a remote server via SSH.
-            </p>
+            
           </div>
 
           {error && (
@@ -103,42 +101,7 @@ export function ExecutionModeModal({ isOpen, onClose, onExecute, scriptName }: E
 
           {/* Execution Mode Selection */}
           <div className="space-y-4 mb-6">
-            {/* Local Execution */}
-            <div 
-              className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                selectedMode === 'local' 
-                  ? 'border-blue-500 bg-blue-50' 
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-              onClick={() => handleModeChange('local')}
-            >
-              <div className="flex items-center">
-                <input
-                  type="radio"
-                  id="local"
-                  name="executionMode"
-                  value="local"
-                  checked={selectedMode === 'local'}
-                  onChange={() => handleModeChange('local')}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                />
-                <label htmlFor="local" className="ml-3 flex-1 cursor-pointer">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                      <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                      </div>
-                    </div>
-                    <div className="ml-3">
-                      <h4 className="text-sm font-medium text-gray-900">Local Execution</h4>
-                      <p className="text-sm text-gray-500">Run the script on this server</p>
-                    </div>
-                  </div>
-                </label>
-              </div>
-            </div>
+
 
             {/* SSH Execution */}
             <div 
