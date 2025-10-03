@@ -72,9 +72,15 @@ class ScriptExecutionHandler {
    * @returns {string|null} - Container ID if found, null otherwise
    */
   parseContainerId(output) {
+    // First, strip ANSI color codes to make pattern matching more reliable
+    const cleanOutput = output.replace(/\x1b\[[0-9;]*m/g, '');
+    
     // Look for various patterns that Proxmox scripts might use
     const patterns = [
-      // Standard patterns
+      // Primary pattern - the exact format from the output
+      /🆔\s+Container\s+ID:\s+(\d+)/i,
+      
+      // Standard patterns with flexible spacing
       /🆔\s*Container\s*ID:\s*(\d+)/i,
       /Container\s*ID:\s*(\d+)/i,
       /CT\s*ID:\s*(\d+)/i,
@@ -98,18 +104,24 @@ class ScriptExecutionHandler {
       /Container\s*(\d+)\s*is\s*ready/i,
       /Container\s*(\d+)\s*started/i,
       
-      // Generic number patterns that might be container IDs
-      /(?:^|\s)(\d{3,4})(?:\s|$)/m, // 3-4 digit numbers (common for container IDs)
+      // Generic number patterns that might be container IDs (3-4 digits)
+      /(?:^|\s)(\d{3,4})(?:\s|$)/m,
     ];
 
-    for (const pattern of patterns) {
-      const match = output.match(pattern);
-      if (match && match[1]) {
-        const containerId = match[1];
-        // Additional validation: container IDs are typically 3-4 digits
-        if (containerId.length >= 3 && containerId.length <= 4) {
-          console.log(`Container ID detected with pattern: ${pattern} -> ${containerId}`);
-          return containerId;
+    // Try patterns on both original and cleaned output
+    const outputsToTry = [output, cleanOutput];
+    
+    for (const testOutput of outputsToTry) {
+      for (const pattern of patterns) {
+        const match = testOutput.match(pattern);
+        if (match && match[1]) {
+          const containerId = match[1];
+          // Additional validation: container IDs are typically 3-4 digits
+          if (containerId.length >= 3 && containerId.length <= 4) {
+            console.log(`Container ID detected with pattern: ${pattern} -> ${containerId}`);
+            console.log(`Matched text: "${match[0]}"`);
+            return containerId;
+          }
         }
       }
     }
@@ -117,6 +129,7 @@ class ScriptExecutionHandler {
     // Debug: log a sample of the output to help identify patterns
     if (output.length > 0) {
       console.log('No Container ID found in output sample:', output.substring(0, 200));
+      console.log('Cleaned output sample:', cleanOutput.substring(0, 200));
     }
     
     return null;
