@@ -121,7 +121,9 @@ class DatabaseService {
       SELECT 
         inst.*,
         s.name as server_name,
-        s.ip as server_ip
+        s.ip as server_ip,
+        s.user as server_user,
+        s.password as server_password
       FROM installed_scripts inst
       LEFT JOIN servers s ON inst.server_id = s.id
       ORDER BY inst.installation_date DESC

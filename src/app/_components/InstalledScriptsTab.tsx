@@ -9,8 +9,11 @@ interface InstalledScript {
   script_name: string;
   script_path: string;
   container_id: string | null;
+  server_id: number | null;
   server_name: string | null;
   server_ip: string | null;
+  server_user: string | null;
+  server_password: string | null;
   execution_mode: 'local' | 'ssh';
   installation_date: string;
   status: 'in_progress' | 'success' | 'failed';
@@ -69,7 +72,7 @@ export function InstalledScriptsTab() {
     }
   };
 
-  const handleUpdateScript = async (script: InstalledScript) => {
+  const handleUpdateScript = (script: InstalledScript) => {
     if (!script.container_id) {
       alert('No Container ID available for this script');
       return;
@@ -78,23 +81,14 @@ export function InstalledScriptsTab() {
     if (confirm(`Are you sure you want to update ${script.script_name}?`)) {
       // Get server info if it's SSH mode
       let server = null;
-      if (script.execution_mode === 'ssh' && script.server_id) {
-        try {
-          // Fetch full server details including credentials
-          const serverResponse = await fetch(`/api/trpc/servers.getServerById?input=${encodeURIComponent(JSON.stringify({ id: script.server_id }))}`);
-          const serverData = await serverResponse.json();
-          
-          if (serverData.result?.data?.json?.success && serverData.result.data.json.server) {
-            server = serverData.result.data.json.server;
-          } else {
-            alert('Failed to fetch server details. Please check server configuration.');
-            return;
-          }
-        } catch (error) {
-          console.error('Error fetching server details:', error);
-          alert('Failed to fetch server details. Please check server configuration.');
-          return;
-        }
+      if (script.execution_mode === 'ssh' && script.server_id && script.server_user && script.server_password) {
+        server = {
+          id: script.server_id,
+          name: script.server_name,
+          ip: script.server_ip,
+          user: script.server_user,
+          password: script.server_password
+        };
       }
       
       setUpdatingScript({
