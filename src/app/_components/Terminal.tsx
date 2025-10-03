@@ -8,6 +8,8 @@ interface TerminalProps {
   onClose: () => void;
   mode?: 'local' | 'ssh';
   server?: any;
+  isUpdate?: boolean;
+  containerId?: string;
 }
 
 interface TerminalMessage {
@@ -16,7 +18,7 @@ interface TerminalMessage {
   timestamp: number;
 }
 
-export function Terminal({ scriptPath, onClose, mode = 'local', server }: TerminalProps) {
+export function Terminal({ scriptPath, onClose, mode = 'local', server, isUpdate = false, containerId }: TerminalProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [isClient, setIsClient] = useState(false);
@@ -28,7 +30,7 @@ export function Terminal({ scriptPath, onClose, mode = 'local', server }: Termin
   const isConnectingRef = useRef<boolean>(false);
   const hasConnectedRef = useRef<boolean>(false);
 
-  const scriptName = scriptPath.split('/').pop() ?? scriptPath.split('\\').pop() ?? 'Unknown Script';
+  const scriptName = isUpdate ? `Update Container ${containerId}` : (scriptPath.split('/').pop() ?? scriptPath.split('\\').pop() ?? 'Unknown Script');
 
   // Ensure we're on the client side
   useEffect(() => {
@@ -156,7 +158,13 @@ export function Terminal({ scriptPath, onClose, mode = 'local', server }: Termin
         isConnectingRef.current = false;
         
         // Send start message immediately after connection
-        const message = {
+        const message = isUpdate ? {
+          action: 'update',
+          containerId,
+          executionId,
+          mode,
+          server
+        } : {
           action: 'start',
           scriptPath,
           executionId,

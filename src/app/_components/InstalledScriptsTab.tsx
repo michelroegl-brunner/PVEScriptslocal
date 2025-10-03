@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { api } from '~/trpc/react';
+import { Terminal } from './Terminal';
 
 interface InstalledScript {
   id: number;
@@ -20,9 +21,7 @@ export function InstalledScriptsTab() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'success' | 'failed' | 'in_progress'>('all');
   const [serverFilter, setServerFilter] = useState<string>('all');
-  const [selectedScript, setSelectedScript] = useState<InstalledScript | null>(null);
-  const [editingContainerId, setEditingContainerId] = useState<number | null>(null);
-  const [newContainerId, setNewContainerId] = useState<string>('');
+  const [updatingScript, setUpdatingScript] = useState<{ id: number; containerId: string; server?: any; mode: 'local' | 'ssh' } | null>(null);
 
   // Fetch installed scripts
   const { data: scriptsData, refetch: refetchScripts, isLoading } = api.installedScripts.getAllInstalledScripts.useQuery();
@@ -36,13 +35,12 @@ export function InstalledScriptsTab() {
   });
 
   // Update script mutation
-  const updateScriptMutation = api.installedScripts.updateInstalledScript.useMutation({
+  const updateScriptMutation = api.installedScripts.updateScript.useMutation({
     onSuccess: () => {
       void refetchScripts();
-      setEditingContainerId(null);
-      setNewContainerId('');
     }
   });
+
 
   const scripts: InstalledScript[] = (scriptsData?.scripts as InstalledScript[]) ?? [];
   const stats = statsData?.stats;
@@ -78,24 +76,32 @@ export function InstalledScriptsTab() {
     }
   };
 
-  const handleEditContainerId = (script: InstalledScript) => {
-    setEditingContainerId(script.id);
-    setNewContainerId(script.container_id || '');
-  };
-
-  const handleSaveContainerId = (id: number) => {
-    if (newContainerId.trim()) {
-      void updateScriptMutation.mutate({
-        id,
-        container_id: newContainerId.trim()
+  const handleUpdateScript = (script: InstalledScript) => {
+    if (confirm(`Are you sure you want to update ${script.script_name}?`)) {
+      // Get server info if it's SSH mode
+      let server = null;
+      if (script.execution_mode === 'ssh' && script.server_id) {
+        // We need to get the server info from the script data
+        server = {
+          id: script.server_id,
+          name: script.server_name,
+          ip: script.server_ip
+        };
+      }
+      
+      setUpdatingScript({
+        id: script.id,
+        containerId: script.container_id!,
+        server: server,
+        mode: script.execution_mode
       });
     }
   };
 
-  const handleCancelEdit = () => {
-    setEditingContainerId(null);
-    setNewContainerId('');
+  const handleCloseUpdateTerminal = () => {
+    setUpdatingScript(null);
   };
+
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
@@ -137,6 +143,20 @@ export function InstalledScriptsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Update Terminal */}
+      {updatingScript && (
+        <div className="mb-8">
+          <Terminal
+            scriptPath={`update-${updatingScript.containerId}`}
+            onClose={handleCloseUpdateTerminal}
+            mode={updatingScript.mode}
+            server={updatingScript.server}
+            isUpdate={true}
+            containerId={updatingScript.containerId}
+          />
+        </div>
+      )}
+
       {/* Header with Stats */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Installed Scripts</h2>
@@ -241,45 +261,10 @@ export function InstalledScriptsTab() {
                       <div className="text-sm text-gray-500">{script.script_path}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {editingContainerId === script.id ? (
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="text"
-                            value={newContainerId}
-                            onChange={(e) => setNewContainerId(e.target.value)}
-                            className="text-sm font-mono border border-gray-300 rounded px-2 py-1 w-20"
-                            placeholder="ID"
-                            autoFocus
-                          />
-                          <button
-                            onClick={() => handleSaveContainerId(script.id)}
-                            className="text-green-600 hover:text-green-800 text-xs"
-                            disabled={updateScriptMutation.isPending}
-                          >
-                            ✓
-                          </button>
-                          <button
-                            onClick={handleCancelEdit}
-                            className="text-gray-500 hover:text-gray-700 text-xs"
-                          >
-                            ✕
-                          </button>
-                        </div>
+                      {script.container_id ? (
+                        <span className="text-sm font-mono text-gray-900">{String(script.container_id)}</span>
                       ) : (
-                        <div className="flex items-center space-x-2">
-                          {script.container_id ? (
-                            <span className="text-sm font-mono text-gray-900">{String(script.container_id)}</span>
-                          ) : (
-                            <span className="text-sm text-gray-400">-</span>
-                          )}
-                          <button
-                            onClick={() => handleEditContainerId(script)}
-                            className="text-blue-600 hover:text-blue-800 text-xs"
-                            title="Edit Container ID"
-                          >
-                            ✏️
-                          </button>
-                        </div>
+                        <span className="text-sm text-gray-400">-</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -307,12 +292,13 @@ export function InstalledScriptsTab() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        {script.output_log && (
+                        {script.container_id && (
                           <button
-                            onClick={() => setSelectedScript(script)}
+                            onClick={() => handleUpdateScript(script)}
                             className="text-blue-600 hover:text-blue-900"
+                            disabled={updateScriptMutation.isPending}
                           >
-                            View Log
+                            {updateScriptMutation.isPending ? 'Updating...' : 'Update'}
                           </button>
                         )}
                         <button
@@ -332,29 +318,6 @@ export function InstalledScriptsTab() {
         )}
       </div>
 
-      {/* Log Viewer Modal */}
-      {selectedScript && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[80vh] overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900">
-                Installation Log: {selectedScript.script_name}
-              </h3>
-              <button
-                onClick={() => setSelectedScript(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-6 overflow-auto max-h-96">
-              <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono bg-gray-50 p-4 rounded">
-                {selectedScript.output_log ?? 'No log available'}
-              </pre>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

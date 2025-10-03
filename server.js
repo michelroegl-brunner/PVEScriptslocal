@@ -118,19 +118,12 @@ class ScriptExecutionHandler {
           const containerId = match[1];
           // Additional validation: container IDs are typically 3-4 digits
           if (containerId.length >= 3 && containerId.length <= 4) {
-            console.log(`Container ID detected with pattern: ${pattern} -> ${containerId}`);
-            console.log(`Matched text: "${match[0]}"`);
             return containerId;
           }
         }
       }
     }
     
-    // Debug: log a sample of the output to help identify patterns
-    if (output.length > 0) {
-      console.log('No Container ID found in output sample:', output.substring(0, 200));
-      console.log('Cleaned output sample:', cleanOutput.substring(0, 200));
-    }
     
     return null;
   }
@@ -171,6 +164,174 @@ class ScriptExecutionHandler {
       this.db.updateInstalledScript(installationId, updateData);
     } catch (error) {
       console.error('Error updating installation record:', error);
+    }
+  }
+
+  /**
+   * Start script update execution
+   * @param {WebSocket} ws - WebSocket connection
+   * @param {string} containerId - Container ID
+   * @param {string} executionId - Execution ID
+   * @param {string} mode - Execution mode ('local' or 'ssh')
+   * @param {Object} server - Server info for SSH
+   */
+  async startScriptUpdate(ws, containerId, executionId, mode = 'local', server = null) {
+    try {
+      if (mode === 'ssh' && server) {
+        await this.startSSHScriptUpdate(ws, containerId, executionId, server);
+      } else {
+        await this.startLocalScriptUpdate(ws, containerId, executionId);
+      }
+    } catch (error) {
+      console.error('Error starting script update:', error);
+      this.sendMessage(ws, {
+        type: 'error',
+        message: `Failed to start script update: ${error.message}`,
+        timestamp: Date.now()
+      });
+    }
+  }
+
+  /**
+   * Start local script update
+   * @param {WebSocket} ws - WebSocket connection
+   * @param {string} containerId - Container ID
+   * @param {string} executionId - Execution ID
+   */
+  async startLocalScriptUpdate(ws, containerId, executionId) {
+    const { spawn } = require('child_process');
+    
+    // Start the update process
+    const updateProcess = spawn('pct', ['enter', containerId, '--', 'update'], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    // Store the execution
+    this.activeExecutions.set(executionId, { 
+      process: updateProcess, 
+      ws,
+      installationId: null,
+      outputBuffer: ''
+    });
+
+    // Send start message
+    this.sendMessage(ws, {
+      type: 'start',
+      message: `Starting update for container ${containerId}...`,
+      timestamp: Date.now()
+    });
+
+    // Handle process output
+    updateProcess.stdout.on('data', (data) => {
+      const output = data.toString();
+      this.sendMessage(ws, {
+        type: 'output',
+        data: output,
+        timestamp: Date.now()
+      });
+    });
+
+    updateProcess.stderr.on('data', (data) => {
+      const output = data.toString();
+      this.sendMessage(ws, {
+        type: 'output',
+        data: output,
+        timestamp: Date.now()
+      });
+    });
+
+    // Handle process exit
+    updateProcess.on('exit', (code) => {
+      const isSuccess = code === 0;
+      this.sendMessage(ws, {
+        type: 'end',
+        message: `Update ${isSuccess ? 'completed successfully' : 'failed'} (exit code: ${code})`,
+        timestamp: Date.now()
+      });
+      
+      // Clean up
+      this.activeExecutions.delete(executionId);
+    });
+
+    updateProcess.on('error', (error) => {
+      console.error('Update process error:', error);
+      this.sendMessage(ws, {
+        type: 'error',
+        message: `Update process error: ${error.message}`,
+        timestamp: Date.now()
+      });
+      
+      // Clean up
+      this.activeExecutions.delete(executionId);
+    });
+  }
+
+  /**
+   * Start SSH script update
+   * @param {WebSocket} ws - WebSocket connection
+   * @param {string} containerId - Container ID
+   * @param {string} executionId - Execution ID
+   * @param {Object} server - Server info
+   */
+  async startSSHScriptUpdate(ws, containerId, executionId, server) {
+    const sshService = require('./src/server/sshService.js');
+    
+    try {
+      // Send start message
+      this.sendMessage(ws, {
+        type: 'start',
+        message: `Starting update for container ${containerId} on ${server.name}...`,
+        timestamp: Date.now()
+      });
+
+      // Execute the update command via SSH
+      const updateCommand = `pct enter ${containerId} -- update`;
+      
+      const execution = await sshService.executeScript(
+        server,
+        updateCommand,
+        (data) => {
+          this.sendMessage(ws, {
+            type: 'output',
+            data: data,
+            timestamp: Date.now()
+          });
+        },
+        (error) => {
+          this.sendMessage(ws, {
+            type: 'output',
+            data: error,
+            timestamp: Date.now()
+          });
+        },
+        (code) => {
+          const isSuccess = code === 0;
+          this.sendMessage(ws, {
+            type: 'end',
+            message: `Update ${isSuccess ? 'completed successfully' : 'failed'} (exit code: ${code})`,
+            timestamp: Date.now()
+          });
+          
+          // Clean up
+          this.activeExecutions.delete(executionId);
+        }
+      );
+
+      // Store the execution
+      this.activeExecutions.set(executionId, { 
+        process: execution.process, 
+        ws,
+        installationId: null,
+        outputBuffer: ''
+      });
+
+    } catch (error) {
+      console.error('SSH update error:', error);
+      this.sendMessage(ws, {
+        type: 'error',
+        message: `SSH update error: ${error.message}`,
+        timestamp: Date.now()
+      });
     }
   }
 
@@ -242,6 +403,18 @@ class ScriptExecutionHandler {
       case 'input':
         if (executionId && input !== undefined) {
           this.sendInputToProcess(executionId, input);
+        }
+        break;
+
+      case 'update':
+        if (executionId && containerId) {
+          await this.startScriptUpdate(ws, containerId, executionId, mode, server);
+        } else {
+          this.sendMessage(ws, {
+            type: 'error',
+            data: 'Missing executionId or containerId for update',
+            timestamp: Date.now()
+          });
         }
         break;
 
