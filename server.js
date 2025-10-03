@@ -274,7 +274,7 @@ class ScriptExecutionHandler {
    * @param {Object} server - Server info
    */
   async startSSHScriptUpdate(ws, containerId, executionId, server) {
-    const sshService = require('./src/server/sshService.js');
+    const { spawn } = require('child_process');
     
     try {
       // Send start message
@@ -284,45 +284,63 @@ class ScriptExecutionHandler {
         timestamp: Date.now()
       });
 
-      // Execute the update command via SSH
-      const updateCommand = `pct enter ${containerId} -- update`;
+      // Execute the update command via SSH using sshpass
+      const sshCommand = `sshpass -p "${server.password}" ssh -o StrictHostKeyChecking=no ${server.user}@${server.ip} "pct enter ${containerId} -- update"`;
       
-      const execution = await sshService.executeScript(
-        server,
-        updateCommand,
-        (data) => {
-          this.sendMessage(ws, {
-            type: 'output',
-            data: data,
-            timestamp: Date.now()
-          });
-        },
-        (error) => {
-          this.sendMessage(ws, {
-            type: 'output',
-            data: error,
-            timestamp: Date.now()
-          });
-        },
-        (code) => {
-          const isSuccess = code === 0;
-          this.sendMessage(ws, {
-            type: 'end',
-            message: `Update ${isSuccess ? 'completed successfully' : 'failed'} (exit code: ${code})`,
-            timestamp: Date.now()
-          });
-          
-          // Clean up
-          this.activeExecutions.delete(executionId);
-        }
-      );
+      const updateProcess = spawn('bash', ['-c', sshCommand], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
 
       // Store the execution
       this.activeExecutions.set(executionId, { 
-        process: execution.process, 
+        process: updateProcess, 
         ws,
         installationId: null,
         outputBuffer: ''
+      });
+
+      // Handle process output
+      updateProcess.stdout.on('data', (data) => {
+        const output = data.toString();
+        this.sendMessage(ws, {
+          type: 'output',
+          data: output,
+          timestamp: Date.now()
+        });
+      });
+
+      updateProcess.stderr.on('data', (data) => {
+        const output = data.toString();
+        this.sendMessage(ws, {
+          type: 'output',
+          data: output,
+          timestamp: Date.now()
+        });
+      });
+
+      // Handle process exit
+      updateProcess.on('exit', (code) => {
+        const isSuccess = code === 0;
+        this.sendMessage(ws, {
+          type: 'end',
+          message: `Update ${isSuccess ? 'completed successfully' : 'failed'} (exit code: ${code})`,
+          timestamp: Date.now()
+        });
+        
+        // Clean up
+        this.activeExecutions.delete(executionId);
+      });
+
+      updateProcess.on('error', (error) => {
+        console.error('SSH update process error:', error);
+        this.sendMessage(ws, {
+          type: 'error',
+          message: `SSH update process error: ${error.message}`,
+          timestamp: Date.now()
+        });
+        
+        // Clean up
+        this.activeExecutions.delete(executionId);
       });
 
     } catch (error) {
